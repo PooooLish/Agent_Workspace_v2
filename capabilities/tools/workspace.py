@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from generate_workspace_status import build_status
+from make_project import scaffold_project, validate_project_target
 from task_lifecycle import (
     COMPLEXITIES,
     build_resume_packet,
@@ -114,6 +115,28 @@ def run_new(root: Path, task_name: str, *, dry_run: bool, complexity: str) -> in
     return subprocess.run(command, cwd=root, check=False).returncode
 
 
+def run_project_new(root: Path, project_name: str, *, dry_run: bool) -> int:
+    config = load_workspace_config(root)
+    projects_root = configured_path(root, config, "projects")
+    project_root = projects_root / project_name
+    if dry_run:
+        project_root = validate_project_target(projects_root, project_name)
+        print(f"Dry run: project directory would be created at {project_root}")
+        print("Git initialization, dependency installation, and publishing are excluded.")
+        return 0
+
+    created, skipped = scaffold_project(projects_root, project_name)
+    print("Created items:")
+    for item in created:
+        print(f"  + {item}")
+    print("Skipped existing items:")
+    for item in skipped:
+        print(f"  = {item}")
+    print(f"Project directory ready: {project_root}")
+    print("Git was not initialized.")
+    return 0
+
+
 def compact_field(value: str, width: int, *, fallback: str = "unknown") -> str:
     text = " ".join(value.split()) or fallback
     if len(text) <= width:
@@ -178,6 +201,18 @@ def build_parser() -> argparse.ArgumentParser:
     new_parser.add_argument("--dry-run", action="store_true")
     new_parser.add_argument("--complexity", choices=COMPLEXITIES, default="standard")
 
+    project_parser = subparsers.add_parser("project", help="manage local projects")
+    project_subparsers = project_parser.add_subparsers(
+        dest="project_command",
+        required=True,
+    )
+    project_new_parser = project_subparsers.add_parser(
+        "new",
+        help="create a local project scaffold without initializing Git",
+    )
+    project_new_parser.add_argument("project_name")
+    project_new_parser.add_argument("--dry-run", action="store_true")
+
     check_parser = subparsers.add_parser("check", help="run workspace checks")
     check_parser.add_argument("--full", action="store_true", help="run extended read-only verification")
 
@@ -203,7 +238,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     root = workspace_root()
     args = build_parser().parse_args()
-    task_root = task_workspace_root(root)
+    if args.command == "project":
+        try:
+            return run_project_new(
+                root,
+                args.project_name,
+                dry_run=args.dry_run,
+            )
+        except ValueError as error:
+            print(f"Error: {error}.")
+            return 1
     if args.command == "new":
         try:
             return run_new(
@@ -219,6 +263,7 @@ def main() -> int:
         return run_checks(root, full=args.full)
     if args.command == "update-status":
         return run_update_status(root)
+    task_root = task_workspace_root(root)
     if args.command == "status":
         return run_status(task_root)
     if args.command == "resume":

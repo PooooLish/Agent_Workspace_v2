@@ -37,6 +37,11 @@ CORE_MAINTENANCE_COMMANDS = [
     "python -B capabilities/tools/workspace.py update-status",
 ]
 
+PROJECT_COMMANDS = [
+    "python -B capabilities/tools/workspace.py project new my-project --dry-run",
+    "python -B capabilities/tools/workspace.py project new my-project",
+]
+
 TASK_LIFECYCLE_COMMANDS = [
     "python -B capabilities/tools/workspace.py status",
     "python -B capabilities/tools/workspace.py resume my_task",
@@ -50,6 +55,7 @@ TOOL_DESCRIPTIONS = {
     "capabilities/tools/check_workspace.py": "checks the V2 structure, ignore policy, adapters, and external-root boundary.",
     "capabilities/tools/check_python_syntax.py": "checks maintained Python source without writing bytecode.",
     "capabilities/tools/generate_workspace_status.py": "regenerates the current-state summary.",
+    "capabilities/tools/make_project.py": "creates a local project scaffold without initializing Git.",
     "capabilities/tools/make_task.py": "contains task scaffolding helpers; its CLI honors the external-root access policy.",
     "capabilities/tools/prepare_baseline_report.py": "provides a compatibility entry for the V2 first-commit report.",
     "capabilities/tools/prepare_first_commit_report.py": "writes a bounded V2 first-commit recommendation report.",

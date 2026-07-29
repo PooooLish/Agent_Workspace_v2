@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from workspace_manifest import CORE_MAINTENANCE_COMMANDS, TASK_LIFECYCLE_COMMANDS, TOOL_DESCRIPTIONS
+from workspace_manifest import (
+    CORE_MAINTENANCE_COMMANDS,
+    PROJECT_COMMANDS,
+    TASK_LIFECYCLE_COMMANDS,
+    TOOL_DESCRIPTIONS,
+)
 from workspace_paths import (
     configured_path,
     load_workspace_config,
@@ -74,6 +79,25 @@ def build_status(root: Path) -> str:
         "",
         "Task creation, verification execution, and closeout are disabled while the external task root is read-only.",
         "",
+        "## Local Project Policy",
+        "",
+        "- The workspace repository tracks only `projects/README.md` under `projects/`.",
+        "- Concrete project directories are local and ignored by the workspace repository.",
+        "- Archived or abandoned projects live under `storage/archives/projects/` and remain local.",
+        "- Runtime state, artifact contents, and archive contents are not tracked by the workspace repository.",
+        "- Long-lived or publishable projects should use independent Git repositories after explicit approval.",
+        "- Project scaffolding does not initialize Git, install dependencies, or publish files.",
+        "",
+        "```powershell",
+        *PROJECT_COMMANDS,
+        "```",
+        "",
+        "## Review Proportionality",
+        "",
+        "- Simple work uses a short conversational plan, focused verification, one self-review, and a concise report.",
+        "- Simple work does not require standalone specifications, implementation plans, or repeated human review gates.",
+        "- Formal planning and review remain appropriate for high-risk, cross-module, long-running, destructive, or multi-agent work.",
+        "",
         "## Current Tools",
         "",
         *tool_items(root),
@@ -101,6 +125,7 @@ def build_status(root: Path) -> str:
         "## Runtime Policy",
         "",
         "- `runtime/` contains generated and locally disposable state; only directory README files are trackable.",
+        "- `storage/` contains durable local data; only directory README contracts are trackable.",
         "- `.local/envs/` and `.local/secrets/` are local-only and ignored.",
         "- No task, Superpowers snapshot, worktree, secret, output, log, or cache was copied from the source workspace.",
         "",

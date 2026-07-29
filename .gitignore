@@ -16,6 +16,16 @@ runtime/sandboxes/**
 !runtime/tmp/README.md
 !runtime/sandboxes/README.md
 
+# Local projects are managed independently from the workspace repository
+projects/**
+!projects/README.md
+
+# Durable artifacts and archives remain local; keep only directory contracts
+storage/artifacts/**
+storage/archives/**
+!storage/artifacts/README.md
+!storage/archives/README.md
+
 # Common generated files
 **/__pycache__/
 *.py[cod]
@@ -28,4 +38,3 @@ node_modules/
 !.env.example
 *.bak
 *.tmp
-

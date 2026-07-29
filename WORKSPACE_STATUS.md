@@ -34,6 +34,26 @@ python -B capabilities/tools/workspace.py update-status
 
 Task creation, verification execution, and closeout are disabled while the external task root is read-only.
 
+## Local Project Policy
+
+- The workspace repository tracks only `projects/README.md` under `projects/`.
+- Concrete project directories are local and ignored by the workspace repository.
+- Archived or abandoned projects live under `storage/archives/projects/` and remain local.
+- Runtime state, artifact contents, and archive contents are not tracked by the workspace repository.
+- Long-lived or publishable projects should use independent Git repositories after explicit approval.
+- Project scaffolding does not initialize Git, install dependencies, or publish files.
+
+```powershell
+python -B capabilities/tools/workspace.py project new my-project --dry-run
+python -B capabilities/tools/workspace.py project new my-project
+```
+
+## Review Proportionality
+
+- Simple work uses a short conversational plan, focused verification, one self-review, and a concise report.
+- Simple work does not require standalone specifications, implementation plans, or repeated human review gates.
+- Formal planning and review remain appropriate for high-risk, cross-module, long-running, destructive, or multi-agent work.
+
 ## Current Tools
 
 - `capabilities/tools/audit_git_readiness.py`: checks V2 Git candidates for risky files and secret-like content.
@@ -41,6 +61,7 @@ Task creation, verification execution, and closeout are disabled while the exter
 - `capabilities/tools/check_python_syntax.py`: checks maintained Python source without writing bytecode.
 - `capabilities/tools/check_workspace.py`: checks the V2 structure, ignore policy, adapters, and external-root boundary.
 - `capabilities/tools/generate_workspace_status.py`: regenerates the current-state summary.
+- `capabilities/tools/make_project.py`: creates a local project scaffold without initializing Git.
 - `capabilities/tools/make_task.py`: contains task scaffolding helpers; its CLI honors the external-root access policy.
 - `capabilities/tools/prepare_baseline_report.py`: provides a compatibility entry for the V2 first-commit report.
 - `capabilities/tools/prepare_first_commit_report.py`: writes a bounded V2 first-commit recommendation report.
@@ -110,5 +131,6 @@ Task creation, verification execution, and closeout are disabled while the exter
 ## Runtime Policy
 
 - `runtime/` contains generated and locally disposable state; only directory README files are trackable.
+- `storage/` contains durable local data; only directory README contracts are trackable.
 - `.local/envs/` and `.local/secrets/` are local-only and ignored.
 - No task, Superpowers snapshot, worktree, secret, output, log, or cache was copied from the source workspace.

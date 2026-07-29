@@ -65,6 +65,17 @@ Regression tests cover exact-name project collisions, case-insensitive
 collisions, dry-run collision handling, and rejection of tracked storage
 content. Existing workspace and boundary tests remain part of the full check.
 
+## Review Proportionality
+
+Simple, small-scale changes use a short conversational plan, focused
+verification, one self-review, and a concise completion report. They do not
+require standalone specifications, implementation plans, or repeated human
+approval checkpoints unless a safety rule, destructive action, or material
+product decision requires explicit approval.
+
+Formal design and review workflows remain appropriate for high-risk,
+cross-module, long-running, destructive, publishing, or multi-agent work.
+
 ## Publication
 
 Only framework changes and contract documentation are staged. Before pushing,

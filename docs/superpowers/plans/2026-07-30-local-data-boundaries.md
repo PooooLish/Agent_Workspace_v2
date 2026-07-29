@@ -210,7 +210,10 @@ untracked Git candidate.
 
 Document active projects at `projects/<name>/`, local archives at
 `storage/archives/projects/<name>/`, and the no-concrete-content remote policy
-for projects, runtime, and storage.
+for projects, runtime, and storage. Define simple work as requiring only a short
+conversational plan, focused verification, one self-review, and a concise
+report, without formal planning files or repeated human approval gates unless
+safety or material product decisions require them.
 
 - [ ] **Step 2: Add the local archive path to configuration**
 

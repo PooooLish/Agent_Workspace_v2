@@ -51,6 +51,12 @@
 
 - `simple`: implement after a short conversational plan; do not create spec or
   plan files.
+- Simple work needs focused verification, one self-review, and a concise
+  report. Do not add repeated human approval gates unless a safety rule, a
+  destructive action, or a material product choice requires one.
+- These simple-work rules take priority over reusable workflows that would
+  otherwise require formal design documents, implementation plans, or repeated
+  review checkpoints.
 - `standard`: use durable task state only when it adds operational value.
 - `complex`: use a written plan for high-risk, cross-module, long-running, or
   multi-agent work.
@@ -62,7 +68,28 @@
 - `.workspace/`: control-plane configuration and minimal policy metadata.
 - `.agents/skills/`: the only Codex skill body location.
 - `capabilities/`: reusable SOPs, prompts, and tools.
+- `projects/`: local project area; the workspace repository tracks only its
+  `README.md`.
 - `runtime/`: regenerable state, logs, temporary files, and experiments.
-- `storage/`: durable artifacts and archives.
+- `storage/`: durable local artifacts and archives; the workspace repository
+  tracks only its directory contracts.
 - `.local/`: ignored machine-local environments and secrets.
 - `WORKSPACE_STATUS.md`: generated current state, never permanent policy.
+
+## Project Repository Isolation
+
+- Concrete projects live under `projects/<project-name>/` and are ignored by
+  the workspace repository.
+- Archived or abandoned projects live under
+  `storage/archives/projects/<project-name>/` and remain ignored.
+- The workspace remote maintains architecture only. Concrete project, runtime,
+  artifact, and archive contents must not be tracked by the root repository.
+- Workspace-wide checks must not recursively traverse concrete project
+  contents.
+- A draft project may remain local without Git.
+- Before committing or publishing a long-lived project, initialize and verify
+  an independent Git repository inside that project only after explicit
+  approval.
+- Project scaffolding must not initialize Git, install dependencies, or publish
+  files automatically.
+- A project's nested `AGENTS.md` may tighten these rules but cannot weaken them.

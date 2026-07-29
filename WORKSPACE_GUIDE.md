@@ -10,6 +10,7 @@ AGENT_WORKSPACE_V2/
 |-- .workspace/          control configuration
 |-- .agents/skills/      Codex skill discovery
 |-- capabilities/        SOPs, prompts, and tools
+|-- projects/            ignored local projects with independent ownership
 |-- runtime/             local regenerable state
 |-- storage/             durable artifacts and archives
 |-- .local/              ignored environments and secrets
@@ -38,12 +39,22 @@ contains prompt templates without authority to weaken policy.
 logs, temporary data, and disposable sandboxes. Only its README contracts are
 intended for Git.
 
-`storage/artifacts/` is for reviewed deliverables. `storage/archives/` is for
-durable historical or normative material, not caches.
+`storage/artifacts/` is for reviewed local deliverables. `storage/archives/` is
+for durable local historical or normative material, not caches. Only their
+README contracts are intended for the workspace repository.
 
 `.local/envs/` and `.local/secrets/` are ignored and outside the default Agent
 read scope. Reproducible environment definitions should live in a future
 tracked infrastructure area, not under `.local/`.
+
+`projects/` is the local project area. The V2 workspace repository tracks only
+`projects/README.md`; concrete project directories are ignored and excluded
+from workspace-wide recursive scans. Drafts may remain local without Git.
+Archived or abandoned projects move to
+`storage/archives/projects/<project-name>/`. Concrete project contents remain
+outside the workspace root repository at every lifecycle stage. Long-lived or
+publishable projects may use independent Git repositories only after explicit
+approval.
 
 ## Common Operating Principles
 
@@ -54,7 +65,9 @@ different directory layout:
 - Nested rules may tighten but never weaken the root safety rules.
 - Skills match reusable intent, SOPs define procedures, prompts provide
   non-authoritative templates, and task notes stay with their owning task.
-- Simple changes use a short conversational plan and no standalone spec.
+- Simple changes use a short conversational plan, focused verification, one
+  self-review, and no standalone spec, implementation plan, or repeated human
+  review cycle.
 - Standard work records durable state only when it improves recovery.
 - Complex or multi-agent work may use task-local plans and coordination
   contracts.
@@ -89,6 +102,26 @@ must not recursively scan the external root during normal workspace checks.
 `new --dry-run` may preview a task target without changing access. Actual task
 creation, command execution, and closeout remain disabled until the ownership
 model, applicable root rules, source baseline, and rollback path are reviewed.
+
+## Local Projects
+
+Preview or create a minimal project scaffold:
+
+```powershell
+python -B capabilities/tools/workspace.py project new my-project --dry-run
+python -B capabilities/tools/workspace.py project new my-project
+```
+
+The command creates project-local rules, goal documentation, source, tests,
+scripts, documentation, outputs, temporary files, and log directories. It does
+not initialize Git, install dependencies, or publish anything.
+
+The workspace repository owns the project-area contract, not project contents.
+When a project becomes durable or publishable, review its local files and then
+explicitly initialize an independent repository from inside that project.
+When a project is archived or abandoned, move it to
+`storage/archives/projects/<project-name>/`; the archive remains local and
+ignored by the workspace repository.
 
 ## Adapter Boundaries
 
