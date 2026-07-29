@@ -69,14 +69,66 @@ def build_agents(project_name: str) -> str:
 ## Workflow
 
 1. Read `project.md`, `README.md`, and the relevant source files.
-2. State a short plan appropriate to the change.
-3. Make small, reviewable edits.
-4. Run focused verification.
-5. Review the diff and report remaining risks.
+2. Complete `docs/open-source-assessment.md` before implementation. Use
+   read-only research first; cloning, downloads, dependency installation, code
+   copying, and forking require explicit approval.
+3. State a short plan appropriate to the change.
+4. Make small, reviewable edits.
+5. Run focused verification.
+6. Review the diff and report remaining risks.
 
 ## Project
 
 - `{project_name}`
+"""
+
+
+def build_open_source_assessment(project_name: str) -> str:
+    return f"""# Open Source Assessment: {project_name}
+
+Complete this assessment before implementation. A simple project may use brief
+entries; expand the evidence and mitigations when risk or reuse is material.
+
+## Search Scope
+
+- Problem and required capabilities:
+- Technical and operational constraints:
+- Search date:
+
+## Candidates
+
+| Candidate | Source and reviewed ref | License | Maintenance | Security | Fit | Reuse mode |
+| --- | --- | --- | --- | --- | --- | --- |
+| | | | | | | |
+
+Aim for three to five viable candidates when available. Prefer repository and
+official documentation links over secondary summaries.
+
+## License and Obligations
+
+Record license compatibility, notices, attribution, redistribution, source
+offer, copyleft, and modification-marking obligations. Missing or unclear
+licensing excludes code copying, integration, adaptation, and forking.
+
+## Security and Maintenance
+
+Record advisories, security policy, release and commit activity, issue health,
+unsafe defaults, dependency concerns, and any required mitigation.
+
+## Decision
+
+Choose one: `greenfield`, `reference`, `integrate`, or `fork`. Explain the
+decision and why viable alternatives were rejected.
+
+## Reuse Boundary
+
+List the concepts, structure, dependencies, or code allowed for reuse; identify
+excluded portions and required notices. Obtain explicit approval before cloning,
+downloading, installing, copying code, or forking.
+
+## Sources
+
+- Add the reviewed primary-source links and access date.
 """
 
 
@@ -118,9 +170,10 @@ This project was scaffolded by Agent Workspace V2.
 ## Start
 
 1. Define the goal and acceptance criteria in `project.md`.
-2. Put implementation code in `src/`.
-3. Put focused tests in `tests/`.
-4. Record durable design and usage notes in `docs/`.
+2. Complete `docs/open-source-assessment.md` before implementation.
+3. Put implementation code in `src/`.
+4. Put focused tests in `tests/`.
+5. Record durable design and usage notes in `docs/`.
 
 Git is intentionally not initialized by the scaffold command.
 """
@@ -174,6 +227,12 @@ def scaffold_project(
     write_if_missing(
         project_root / "README.md",
         build_readme(project_name),
+        created,
+        skipped,
+    )
+    write_if_missing(
+        project_root / "docs" / "open-source-assessment.md",
+        build_open_source_assessment(project_name),
         created,
         skipped,
     )

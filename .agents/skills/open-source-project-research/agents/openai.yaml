@@ -1,0 +1,4 @@
+interface:
+  display_name: "Open Source Project Research"
+  short_description: "Evaluate open-source options before projects"
+  default_prompt: "Use $open-source-project-research to evaluate open-source options before starting this project."

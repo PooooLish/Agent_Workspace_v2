@@ -114,7 +114,21 @@ python -B capabilities/tools/workspace.py project new my-project
 
 The command creates project-local rules, goal documentation, source, tests,
 scripts, documentation, outputs, temporary files, and log directories. It does
-not initialize Git, install dependencies, or publish anything.
+not initialize Git, install dependencies, or publish anything. It also creates
+`docs/open-source-assessment.md`.
+
+Before implementation, use read-only web and repository research to compare
+current open-source options. Prefer three to five viable candidates when
+available, and evaluate the reviewed source/version, license obligations,
+maintenance, security, technical fit, integration cost, and reuse boundary.
+Choose `greenfield`, `reference`, `integrate`, or `fork` and record the evidence
+in the generated assessment. A simple project may use a concise table and does
+not need repeated human review.
+
+Research alone does not authorize mutation. Cloning, downloading, installing a
+dependency, copying code, or creating a fork requires explicit approval.
+Missing, ambiguous, or incompatible licensing rules out code reuse; preserve
+required notices and attribution for approved reuse.
 
 The workspace repository owns the project-area contract, not project contents.
 When a project becomes durable or publishable, review its local files and then

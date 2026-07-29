@@ -54,6 +54,14 @@ python -B capabilities/tools/workspace.py project new my-project
 - Simple work does not require standalone specifications, implementation plans, or repeated human review gates.
 - Formal planning and review remain appropriate for high-risk, cross-module, long-running, destructive, or multi-agent work.
 
+## Open Source Intake
+
+- Research current open-source repositories and authoritative documentation before implementing a new software project.
+- Record source/version, license, maintenance, security, fit, reuse boundary, and a `greenfield`, `reference`, `integrate`, or `fork` decision.
+- Simple projects may use a concise assessment without repeated human review.
+- Cloning, downloading, dependency installation, code copying, and forking require explicit approval.
+- Missing, ambiguous, or incompatible licensing prohibits code reuse.
+
 ## Current Tools
 
 - `capabilities/tools/audit_git_readiness.py`: checks V2 Git candidates for risky files and secret-like content.
@@ -84,6 +92,7 @@ python -B capabilities/tools/workspace.py project new my-project
 - `.agents/skills/code-review`
 - `.agents/skills/documentation-writer`
 - `.agents/skills/linux-debugging`
+- `.agents/skills/open-source-project-research`
 - `.agents/skills/python-project-setup`
 - `.agents/skills/visual-design-review`
 
@@ -94,6 +103,7 @@ python -B capabilities/tools/workspace.py project new my-project
 - `capabilities/sops/line_endings.md`
 - `capabilities/sops/modify_existing_project.md`
 - `capabilities/sops/new_task.md`
+- `capabilities/sops/open_source_project_intake.md`
 - `capabilities/sops/publish_independent_task.md`
 - `capabilities/sops/safe_shell_commands.md`
 - `capabilities/sops/setup_external_api.md`

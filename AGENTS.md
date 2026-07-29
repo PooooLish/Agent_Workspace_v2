@@ -63,6 +63,22 @@
 - Framework decisions belong in `docs/framework/`. Task-specific planning stays
   with its owning task when task writes are explicitly enabled.
 
+## Open Source Intake
+
+- Before implementing a new software project, research current open-source
+  repositories and authoritative documentation that could satisfy or inform it.
+- Record the comparison and decision in the project's
+  `docs/open-source-assessment.md`. Simple projects may use a concise table;
+  standard and complex projects need evidence proportional to their risk.
+- Evaluate source and version, license obligations, maintenance, security,
+  technical fit, integration cost, and the intended reuse boundary.
+- Choose and justify one approach: `greenfield`, `reference`, `integrate`, or
+  `fork`.
+- Research is read-only. Cloning, downloading, installing dependencies, copying
+  code, or forking requires explicit approval.
+- Missing, ambiguous, or incompatible licensing prohibits copying, integrating,
+  adapting, or forking code.
+
 ## Placement
 
 - `.workspace/`: control-plane configuration and minimal policy metadata.

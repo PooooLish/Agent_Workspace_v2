@@ -34,6 +34,8 @@ python -B capabilities/tools/workspace.py project new my-project --dry-run
 - Skill 用于按意图匹配可复用能力，SOP 用于直接执行固定流程，Prompt 只是非强制模板。
 - 简单任务只需简短对话计划、聚焦验证和一次自审，不创建规格/计划文件，也不增加
   不必要的多轮人工确认；复杂或多 Agent 任务才使用正式计划与协调契约。
+- 新项目实施前先只读筛查当前开源资料和仓库，并记录许可证、维护、安全、适配性及
+  复用边界。简单项目使用简表即可；克隆、下载、安装依赖、复制代码或 fork 仍需明确授权。
 - `workspace.py check --full` 只验证状态，不自动重写文档；需要更新清单时显式运行
   `workspace.py update-status`。
 - 外部任务默认只读。`new --dry-run` 可以预览，新建、执行命令和关闭任务仍被阻止。
@@ -77,6 +79,10 @@ task creation, verification execution, and task closeout are blocked.
 - Simple work uses a short conversational plan, focused verification, one
   self-review, and no formal spec or repeated approval cycle. Complex or
   multi-agent work may use task-local plans and coordination contracts.
+- Before implementation, new projects use read-only research to assess current
+  open-source options, licensing, maintenance, security, fit, and reuse
+  boundaries. Simple projects may use a concise table; cloning, downloading,
+  installing, copying code, or forking still requires explicit approval.
 - `workspace.py check --full` verifies tracked status without rewriting it. Run
   `workspace.py update-status` explicitly when the inventory changes.
 - External tasks are read-only by default. `new --dry-run` previews a target;

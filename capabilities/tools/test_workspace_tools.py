@@ -81,6 +81,54 @@ class ScaffoldTests(unittest.TestCase):
             self.assertFalse((project / ".git").exists())
             self.assertIn(str(project / "README.md"), created)
 
+    def test_project_scaffold_includes_open_source_assessment(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            make_project.scaffold_project(projects_root, "example-project")
+
+            assessment = (
+                projects_root
+                / "example-project"
+                / "docs"
+                / "open-source-assessment.md"
+            )
+            text = assessment.read_text(encoding="utf-8")
+
+        for heading in (
+            "## Search Scope",
+            "## Candidates",
+            "## License and Obligations",
+            "## Security and Maintenance",
+            "## Decision",
+            "## Reuse Boundary",
+        ):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, text)
+
+    def test_generated_project_rules_require_open_source_intake(self) -> None:
+        rules = make_project.build_agents("example-project")
+        self.assertIn("open-source-assessment.md", rules)
+        self.assertIn("before implementation", rules)
+
+    def test_open_source_research_skill_and_sop_exist(self) -> None:
+        self.assertTrue(
+            (
+                ROOT
+                / ".agents"
+                / "skills"
+                / "open-source-project-research"
+                / "SKILL.md"
+            ).is_file()
+        )
+        self.assertTrue(
+            (
+                ROOT
+                / "capabilities"
+                / "sops"
+                / "open_source_project_intake.md"
+            ).is_file()
+        )
+
     def test_scaffold_rejects_exact_existing_project_without_changes(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
             projects_root = Path(directory) / "projects"
