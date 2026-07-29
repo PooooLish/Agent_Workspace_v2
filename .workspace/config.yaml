@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "paths": {
+    "skills": ".agents/skills",
+    "sops": "capabilities/sops",
+    "prompts": "capabilities/prompts",
+    "tools": "capabilities/tools",
+    "task_state": "runtime/task-state",
+    "runs": "runtime/runs",
+    "outputs": "runtime/outputs",
+    "logs": "runtime/logs",
+    "tmp": "runtime/tmp",
+    "sandboxes": "runtime/sandboxes",
+    "artifacts": "storage/artifacts",
+    "archives": "storage/archives",
+    "environment_docs": "docs/environments",
+    "local_envs": ".local/envs",
+    "local_secrets": ".local/secrets"
+  },
+  "external_roots": {
+    "tasks": {
+      "path": "../agent_workspace/tasks",
+      "access": "read_only",
+      "env": "AGENT_TASKS_ROOT"
+    }
+  },
+  "adapters": {
+    "codex": ".codex",
+    "skills": ".agents/skills"
+  }
+}

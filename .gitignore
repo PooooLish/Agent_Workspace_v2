@@ -1,0 +1,31 @@
+# Machine-local environments and credentials
+.local/envs/**
+.local/secrets/**
+
+# Runtime state; keep only directory contracts
+runtime/task-state/**
+runtime/runs/**
+runtime/outputs/**
+runtime/logs/**
+runtime/tmp/**
+runtime/sandboxes/**
+!runtime/task-state/README.md
+!runtime/runs/README.md
+!runtime/outputs/README.md
+!runtime/logs/README.md
+!runtime/tmp/README.md
+!runtime/sandboxes/README.md
+
+# Common generated files
+**/__pycache__/
+*.py[cod]
+.ruff_cache/
+.pytest_cache/
+.playwright-cli/
+node_modules/
+.env
+.env.*
+!.env.example
+*.bak
+*.tmp
+

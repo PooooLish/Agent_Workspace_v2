@@ -1,0 +1,10 @@
+# Conservative, project-scoped MCP configuration.
+# No credentials are stored here. Restart Codex after changing this file.
+
+[mcp_servers.openaiDeveloperDocs]
+url = "https://developers.openai.com/mcp"
+enabled = true
+required = false
+default_tools_approval_mode = "prompt"
+startup_timeout_sec = 10
+tool_timeout_sec = 30
