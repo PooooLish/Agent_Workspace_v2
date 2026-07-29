@@ -13,7 +13,7 @@ def main() -> int:
         return 1
     if path.read_text(encoding="utf-8") != build_status(root):
         print("WORKSPACE_STATUS.md is stale. Run:")
-        print("  python capabilities/tools/generate_workspace_status.py")
+        print("  python -B capabilities/tools/workspace.py update-status")
         return 1
     print("WORKSPACE_STATUS.md is current.")
     return 0

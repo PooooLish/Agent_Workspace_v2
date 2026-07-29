@@ -128,25 +128,24 @@ def extract_commands(section: str) -> tuple[str, ...]:
     return tuple(commands)
 
 
-def task_root_for(workspace_root: Path, name: str) -> Path:
+def task_root_for(tasks_root: Path, name: str) -> Path:
     validate_task_name(name)
-    tasks_root = (workspace_root / "tasks").resolve()
+    tasks_root = tasks_root.resolve()
     task_root = (tasks_root / name).resolve()
     if tasks_root not in task_root.parents:
         raise ValueError("task path must stay inside tasks")
     return task_root
 
 
-def load_task(workspace_root: Path, name: str) -> TaskRecord:
-    task_root = task_root_for(workspace_root, name)
+def load_task(tasks_root: Path, name: str) -> TaskRecord:
+    task_root = task_root_for(tasks_root, name)
     task_path = task_root / "task.md"
     if not task_path.is_file():
         raise ValueError(f"tasks/{name}/task.md does not exist")
     return TaskRecord(task_root, name, parse_sections(task_path.read_text(encoding="utf-8")))
 
 
-def discover_task_names(workspace_root: Path) -> list[str]:
-    tasks_root = workspace_root / "tasks"
+def discover_task_names(tasks_root: Path) -> list[str]:
     if not tasks_root.is_dir():
         return []
     return sorted(

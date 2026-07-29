@@ -1,14 +1,14 @@
 # Line Endings SOP
 
-Use this SOP when `python capabilities/tools/audit_line_endings.py` reports drift from `.gitattributes`.
+Use this SOP when `python -B capabilities/tools/audit_line_endings.py` reports drift from `.gitattributes`.
 
 ## Procedure
 
-1. Run `python capabilities/tools/audit_line_endings.py --examples 20`.
+1. Run `python -B capabilities/tools/audit_line_endings.py --examples 20`.
 2. Separate root/workspace files from task-specific files.
 3. Normalize files only inside the current task scope unless a broader cleanup was explicitly requested.
-4. After any normalization, run `python capabilities/tools/audit_line_endings.py` again.
-5. Run `python capabilities/tools/run_workspace_maintenance.py` before handoff.
+4. After any normalization, run `python -B capabilities/tools/audit_line_endings.py` again.
+5. Run `python -B capabilities/tools/run_workspace_maintenance.py` before handoff.
 
 ## Safety Rules
 
@@ -23,7 +23,7 @@ Use this SOP when `python capabilities/tools/audit_line_endings.py` reports drif
 Use strict mode only after the known drift is intentionally reduced:
 
 ```powershell
-python capabilities/tools/audit_line_endings.py --strict
+python -B capabilities/tools/audit_line_endings.py --strict
 ```
 
 Strict mode returns nonzero when any drift remains.

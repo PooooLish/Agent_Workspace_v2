@@ -42,7 +42,7 @@ def main() -> int:
 
     if normalize_generated_line(actual) != normalize_generated_line(expected):
         print("runtime/outputs/first_commit_recommendation.md is stale. Run:")
-        print("  python capabilities/tools/prepare_first_commit_report.py")
+        print("  python -B capabilities/tools/prepare_first_commit_report.py")
         return 1
 
     print("runtime/outputs/first_commit_recommendation.md is current.")

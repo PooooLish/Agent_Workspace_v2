@@ -207,7 +207,7 @@ Escape a literal pipe inside a table cell as `\\|`.
 
 
 def scaffold_task(
-    workspace_root: Path,
+    tasks_root: Path,
     task_name: str,
     *,
     complexity: str = "standard",
@@ -216,7 +216,6 @@ def scaffold_task(
     if complexity not in COMPLEXITIES:
         raise ValueError(f"complexity must be one of: {', '.join(COMPLEXITIES)}")
 
-    tasks_root = workspace_root / "tasks"
     if tasks_root.exists():
         collisions = [
             path.name
@@ -308,7 +307,7 @@ def main() -> int:
 
     try:
         created, skipped = scaffold_task(
-            tasks_root.parent,
+            tasks_root,
             task_name,
             complexity=args.complexity,
         )

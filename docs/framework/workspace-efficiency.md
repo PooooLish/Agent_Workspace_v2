@@ -3,10 +3,10 @@
 `capabilities/tools/workspace.py` is the supported entry point:
 
 ```powershell
-python capabilities/tools/workspace.py check
-python capabilities/tools/workspace.py check --full
-python capabilities/tools/workspace.py status
-python capabilities/tools/workspace.py doctor
+python -B capabilities/tools/workspace.py check
+python -B capabilities/tools/workspace.py check --full
+python -B capabilities/tools/workspace.py status
+python -B capabilities/tools/workspace.py doctor
 ```
 
 Path resolution is centralized in `workspace_paths.py`. New tools should consume
@@ -22,4 +22,3 @@ reviewable.
 Quick checks run focused regression tests, structure validation, Git candidate
 auditing, and line-ending validation. Full checks additionally regenerate and
 verify `WORKSPACE_STATUS.md` and summarize V2 Git candidates.
-

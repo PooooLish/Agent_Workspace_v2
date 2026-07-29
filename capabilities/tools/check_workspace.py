@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+from typing import Callable, Iterator
 
 from workspace_manifest import TOOL_DESCRIPTIONS
 from workspace_paths import (
@@ -22,7 +23,8 @@ REQUIRED_ITEMS = (
     "WORKSPACE_STATUS.md",
     ".gitignore",
     ".gitattributes",
-    ".workspace/config.yaml",
+    ".github/workflows/workspace-check.yml",
+    ".workspace/config.json",
     ".workspace/policies/README.md",
     ".workspace/profiles/README.md",
     ".workspace/registry/README.md",
@@ -40,8 +42,7 @@ REQUIRED_ITEMS = (
     "runtime/sandboxes/README.md",
     "storage/artifacts/README.md",
     "storage/archives/README.md",
-    ".local/envs",
-    ".local/secrets",
+    ".local/README.md",
     "docs/environments",
 )
 
@@ -60,6 +61,16 @@ REQUIRED_IGNORE_PATTERNS = (
 )
 
 LEGACY_ROOTS = ("tools", "prompts", "sops", "outputs", "logs", "tmp", "envs", "archives")
+LINK_SCAN_ROOTS = (
+    ".workspace",
+    ".agents",
+    ".codex",
+    ".github",
+    "capabilities",
+    "docs",
+    "storage",
+)
+WINDOWS_REPARSE_POINT = 0x400
 
 
 def git_tracked_files(root: Path) -> list[str]:
@@ -76,6 +87,38 @@ def git_tracked_files(root: Path) -> list[str]:
     if result.returncode != 0:
         return []
     return [item for item in result.stdout.split("\0") if item]
+
+
+def is_link_or_junction(
+    path: Path,
+    *,
+    lstat: Callable[[Path], object] = os.lstat,
+) -> bool:
+    if path.is_symlink():
+        return True
+    attributes = getattr(lstat(path), "st_file_attributes", 0)
+    return bool(attributes & WINDOWS_REPARSE_POINT)
+
+
+def iter_link_candidates(root: Path) -> Iterator[Path]:
+    for relative in LINK_SCAN_ROOTS:
+        scan_root = root / relative
+        if not os.path.lexists(scan_root):
+            continue
+        yield scan_root
+        if is_link_or_junction(scan_root) or not scan_root.is_dir():
+            continue
+        pending = [scan_root]
+        while pending:
+            current = pending.pop()
+            with os.scandir(current) as entries:
+                for entry in sorted(entries, key=lambda item: item.name):
+                    path = Path(entry.path)
+                    yield path
+                    if is_link_or_junction(path):
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        pending.append(path)
 
 
 def check_workspace(root: Path) -> list[str]:
@@ -104,9 +147,6 @@ def check_workspace(root: Path) -> list[str]:
         issues.append("external tasks root must be read_only")
     if tasks.path.is_relative_to(root):
         issues.append("external tasks root unexpectedly resolves inside V2")
-    if not tasks.path.is_dir():
-        issues.append(f"external tasks root is unavailable: {tasks.path}")
-
     gitignore_path = root / ".gitignore"
     if gitignore_path.is_file():
         lines = {
@@ -118,9 +158,9 @@ def check_workspace(root: Path) -> list[str]:
             if pattern not in lines:
                 issues.append(f"missing .gitignore pattern: {pattern}")
 
-    for path in root.rglob("*"):
-        if path.is_symlink():
-            issues.append(f"symbolic link is not allowed in phase one: {path.relative_to(root)}")
+    for path in iter_link_candidates(root):
+        if is_link_or_junction(path):
+            issues.append(f"link or junction is not allowed in phase one: {path.relative_to(root)}")
 
     skills_root = root / ".agents" / "skills"
     for skill in skills_root.iterdir() if skills_root.is_dir() else ():
@@ -140,9 +180,22 @@ def check_workspace(root: Path) -> list[str]:
     return sorted(set(issues))
 
 
+def workspace_warnings(root: Path) -> list[str]:
+    config = load_workspace_config(root)
+    tasks = resolve_external_root(root, config, "tasks")
+    warnings: list[str] = []
+    if not tasks.path.is_dir():
+        warnings.append(
+            f"external tasks root is unavailable; task commands are disabled: {tasks.path}"
+        )
+    return warnings
+
+
 def main() -> int:
     root = workspace_root()
     issues = check_workspace(root)
+    for warning in workspace_warnings(root):
+        print(f"Warning: {warning}")
     if issues:
         print("Workspace check failed:")
         for issue in issues:

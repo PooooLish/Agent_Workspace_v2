@@ -12,6 +12,7 @@ class StepSpec:
 
 
 QUICK_CHECK_STEPS = (
+    StepSpec("Python syntax", ("{python}", "capabilities/tools/check_python_syntax.py")),
     StepSpec("tool regression tests", ("{python}", "capabilities/tools/test_workspace_tools.py")),
     StepSpec("V2 boundary tests", ("{python}", "capabilities/tools/test_v2_workspace.py")),
     StepSpec("workspace structure", ("{python}", "capabilities/tools/check_workspace.py")),
@@ -21,7 +22,6 @@ QUICK_CHECK_STEPS = (
 
 FULL_ONLY_STEPS = (
     StepSpec("git candidate summary", ("{python}", "capabilities/tools/summarize_git_candidates.py", "--top", "8")),
-    StepSpec("workspace status", ("{python}", "capabilities/tools/generate_workspace_status.py")),
     StepSpec("workspace status freshness", ("{python}", "capabilities/tools/verify_workspace_status.py")),
     StepSpec(
         "strict large-file reminder",
@@ -32,21 +32,23 @@ FULL_ONLY_STEPS = (
 
 
 CORE_MAINTENANCE_COMMANDS = [
-    "python capabilities/tools/workspace.py check",
-    "python capabilities/tools/workspace.py check --full",
+    "python -B capabilities/tools/workspace.py check",
+    "python -B capabilities/tools/workspace.py check --full",
+    "python -B capabilities/tools/workspace.py update-status",
 ]
 
 TASK_LIFECYCLE_COMMANDS = [
-    "python capabilities/tools/workspace.py status",
-    "python capabilities/tools/workspace.py resume my_task",
-    "python capabilities/tools/workspace.py doctor my_task",
-    "python capabilities/tools/workspace.py verify my_task",
+    "python -B capabilities/tools/workspace.py status",
+    "python -B capabilities/tools/workspace.py resume my_task",
+    "python -B capabilities/tools/workspace.py doctor my_task",
+    "python -B capabilities/tools/workspace.py verify my_task",
 ]
 
 TOOL_DESCRIPTIONS = {
     "capabilities/tools/audit_git_readiness.py": "checks V2 Git candidates for risky files and secret-like content.",
     "capabilities/tools/audit_line_endings.py": "reports line ending drift against `.gitattributes` policy.",
     "capabilities/tools/check_workspace.py": "checks the V2 structure, ignore policy, adapters, and external-root boundary.",
+    "capabilities/tools/check_python_syntax.py": "checks maintained Python source without writing bytecode.",
     "capabilities/tools/generate_workspace_status.py": "regenerates the current-state summary.",
     "capabilities/tools/make_task.py": "contains task scaffolding helpers; its CLI honors the external-root access policy.",
     "capabilities/tools/run_workspace_maintenance.py": "runs the full V2 maintenance chain.",

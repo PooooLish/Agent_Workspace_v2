@@ -3,7 +3,7 @@
 V2 is independent from the source workspace. It neither copies task assets nor
 uses links or junctions to expose them.
 
-The external task root is declared in `.workspace/config.yaml` with
+The external task root is declared in `.workspace/config.json` with
 `access: read_only`. Tools may show task state, but mutating task commands must
 call the centralized permission guard before loading or executing task content.
 
@@ -16,4 +16,3 @@ not repair the source automatically.
 V2 Git audits must run with V2 as their working directory. Nested repositories
 under the external task root are separate repositories and remain outside V2
 maintenance scope.
-

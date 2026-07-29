@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Mapping
 
 
-CONFIG_PATH = Path(".workspace/config.yaml")
+CONFIG_PATH = Path(".workspace/config.json")
 
 
 @dataclass(frozen=True)

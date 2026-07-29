@@ -4,10 +4,10 @@ Use this SOP before creating the first workspace commit or any later broad struc
 
 ## Procedure
 
-1. Run `python capabilities/tools/check_workspace.py`.
-2. Run `python capabilities/tools/audit_git_readiness.py`.
-3. Run `python capabilities/tools/summarize_git_candidates.py`.
-4. Run `python capabilities/tools/prepare_first_commit_report.py`.
+1. Run `python -B capabilities/tools/check_workspace.py`.
+2. Run `python -B capabilities/tools/audit_git_readiness.py`.
+3. Run `python -B capabilities/tools/summarize_git_candidates.py`.
+4. Run `python -B capabilities/tools/prepare_first_commit_report.py`.
 5. Review `runtime/outputs/first_commit_recommendation.md`.
 6. Confirm that generated outputs, logs, dependency folders, raw media, and local secrets are ignored.
 7. Confirm that concrete task folders are ignored and `git ls-files tasks` only shows intended public placeholders.

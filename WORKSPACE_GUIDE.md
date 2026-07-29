@@ -42,19 +42,23 @@ tracked infrastructure area, not under `.local/`.
 
 ## External Tasks
 
-The authoritative configuration is `.workspace/config.yaml`:
+The authoritative configuration is `.workspace/config.json`:
 
-```yaml
-external_roots:
-  tasks:
-    path: ../agent_workspace/tasks
-    access: read_only
-    env: AGENT_TASKS_ROOT
+```json
+{
+  "external_roots": {
+    "tasks": {
+      "path": "../agent_workspace/tasks",
+      "access": "read_only",
+      "env": "AGENT_TASKS_ROOT"
+    }
+  }
+}
 ```
 
-The file uses JSON-compatible YAML so the standard-library resolver can parse it
-without installing a YAML dependency. The optional environment variable changes
-only the path. Permission remains controlled by the configuration.
+The file uses JSON so the standard-library resolver can parse it without an
+additional dependency. The optional environment variable changes only the path.
+Permission remains controlled by the configuration.
 
 Tools must use `workspace_paths.resolve_external_root()`. Phase-one scanners may
 check availability and read task metadata only when explicitly invoked; they
@@ -69,11 +73,10 @@ execution state or create `.worktrees/`.
 ## Maintenance
 
 ```powershell
-python capabilities/tools/test_v2_workspace.py
-python capabilities/tools/test_workspace_tools.py
-python capabilities/tools/check_workspace.py
-python capabilities/tools/workspace.py check
-python -m compileall capabilities/tools
+python -B capabilities/tools/test_v2_workspace.py
+python -B capabilities/tools/test_workspace_tools.py
+python -B capabilities/tools/check_workspace.py
+python -B capabilities/tools/workspace.py check
 ```
 
 Temporary test directories must be created under `runtime/tmp/`. Before treating
@@ -87,4 +90,3 @@ automatic repair.
 - `AGENTS.md`: mandatory top-level Agent and safety rules.
 - `WORKSPACE_GUIDE.md`: architecture, maintenance, and extension rules.
 - `WORKSPACE_STATUS.md`: generated inventory and current state only.
-

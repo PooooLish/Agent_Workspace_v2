@@ -6,12 +6,12 @@
 ## 快速开始
 
 ```powershell
-python capabilities/tools/workspace.py check
-python capabilities/tools/workspace.py status
-python capabilities/tools/workspace.py doctor
+python -B capabilities/tools/workspace.py check
+python -B capabilities/tools/workspace.py status
+python -B capabilities/tools/workspace.py doctor
 ```
 
-任务目录由 `.workspace/config.yaml` 统一解析。第一阶段配置为
+任务目录由 `.workspace/config.json` 统一解析。第一阶段配置为
 `../agent_workspace/tasks`、`read_only`；因此状态查看可用，而新建任务、
 执行任务验证和关闭任务会被拒绝。`AGENT_TASKS_ROOT` 可覆盖路径，但不能覆盖
 访问级别。
@@ -42,12 +42,12 @@ read-only root rather than copied.
 ## Quick Start
 
 ```powershell
-python capabilities/tools/workspace.py check
-python capabilities/tools/workspace.py status
-python capabilities/tools/workspace.py doctor
+python -B capabilities/tools/workspace.py check
+python -B capabilities/tools/workspace.py status
+python -B capabilities/tools/workspace.py doctor
 ```
 
-`.workspace/config.yaml` resolves the tasks root. Phase one points to
+`.workspace/config.json` resolves the tasks root. Phase one points to
 `../agent_workspace/tasks` with `read_only` access. Read-only views work, while
 task creation, verification execution, and task closeout are blocked.
 `AGENT_TASKS_ROOT` may override the location but not its access policy.
@@ -57,4 +57,3 @@ See [WORKSPACE_GUIDE.md](WORKSPACE_GUIDE.md) for architecture and maintenance,
 [WORKSPACE_STATUS.md](WORKSPACE_STATUS.md) for generated current state.
 
 </details>
-

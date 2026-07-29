@@ -11,7 +11,7 @@
 ## Source Workspace Isolation
 
 - Treat `../agent_workspace/` as a read-only external source.
-- Resolve the external tasks root through `.workspace/config.yaml` or
+- Resolve the external tasks root through `.workspace/config.json` or
   `AGENT_TASKS_ROOT`; do not scatter the relative path through code.
 - Read-only task views are allowed. Creating tasks, running task commands,
   closing tasks, formatting, fixing, or writing state in the external root is
@@ -59,4 +59,3 @@
 - `storage/`: durable artifacts and archives.
 - `.local/`: ignored machine-local environments and secrets.
 - `WORKSPACE_STATUS.md`: generated current state, never permanent policy.
-

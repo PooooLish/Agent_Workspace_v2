@@ -5,26 +5,25 @@ This generated file records the current V2 framework inventory. Permanent rules 
 Regenerate it with:
 
 ```powershell
-python capabilities/tools/generate_workspace_status.py
+python -B capabilities/tools/workspace.py update-status
 ```
 
 ## Current Health
 
 - Layout: isolated V2 control plane and capability directories.
 - External tasks access: `read_only`.
-- External tasks source: `.workspace/config.yaml`.
-- External tasks available: `yes`.
 - OS-level write isolation: not enforced by this configuration.
 
 ## Core Commands
 
 ```powershell
-python capabilities/tools/workspace.py status
-python capabilities/tools/workspace.py resume my_task
-python capabilities/tools/workspace.py doctor my_task
-python capabilities/tools/workspace.py verify my_task
-python capabilities/tools/workspace.py check
-python capabilities/tools/workspace.py check --full
+python -B capabilities/tools/workspace.py status
+python -B capabilities/tools/workspace.py resume my_task
+python -B capabilities/tools/workspace.py doctor my_task
+python -B capabilities/tools/workspace.py verify my_task
+python -B capabilities/tools/workspace.py check
+python -B capabilities/tools/workspace.py check --full
+python -B capabilities/tools/workspace.py update-status
 ```
 
 Task creation, verification execution, and closeout are disabled while the external task root is read-only.
@@ -33,6 +32,7 @@ Task creation, verification execution, and closeout are disabled while the exter
 
 - `capabilities/tools/audit_git_readiness.py`: checks V2 Git candidates for risky files and secret-like content.
 - `capabilities/tools/audit_line_endings.py`: reports line ending drift against `.gitattributes` policy.
+- `capabilities/tools/check_python_syntax.py`: checks maintained Python source without writing bytecode.
 - `capabilities/tools/check_workspace.py`: checks the V2 structure, ignore policy, adapters, and external-root boundary.
 - `capabilities/tools/generate_workspace_status.py`: regenerates the current-state summary.
 - `capabilities/tools/make_task.py`: contains task scaffolding helpers; its CLI honors the external-root access policy.

@@ -15,5 +15,5 @@ drift. For tools without native discovery, select a relevant Skill explicitly
 and provide its path as context.
 
 Tasks are external and read-only in phase one. Agents start in V2, resolve the
-task root through `.workspace/config.yaml`, and must not infer write permission
+task root through `.workspace/config.json`, and must not infer write permission
 from another framework's capabilities.

@@ -4,8 +4,8 @@ Use this SOP after broad workspace edits, before handoff, and periodically while
 
 ## Procedure
 
-1. Run `python capabilities/tools/workspace.py check` for a quick, read-only routine check.
-2. Run `python capabilities/tools/workspace.py check --full` before broad framework handoff.
+1. Run `python -B capabilities/tools/workspace.py check` for a quick, read-only routine check.
+2. Run `python -B capabilities/tools/workspace.py check --full` before broad framework handoff.
 3. Review `WORKSPACE_STATUS.md` after a full check.
 4. Run `git ls-files tasks archives sandboxes` and confirm only intended public policy placeholders are tracked.
 5. Update root docs when the workspace structure, tools, SOPs, prompts, or safety model changes.
@@ -25,8 +25,8 @@ Task creation is disabled while the external tasks root is configured read-only.
 
 - Do not delete cleanup candidates without explicit approval.
 - Do not stage generated outputs, logs, dependency folders, raw media, or local secrets.
-- Treat `python capabilities/tools/audit_git_readiness.py` as the default commit gate.
-- Treat `python capabilities/tools/audit_git_readiness.py --max-mb 1` as a stricter review reminder, not an automatic failure.
+- Treat `python -B capabilities/tools/audit_git_readiness.py` as the default commit gate.
+- Treat `python -B capabilities/tools/audit_git_readiness.py --max-mb 1` as a stricter review reminder, not an automatic failure.
 
 ## Expected Report
 

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Callable, Sequence
 
+from generate_workspace_status import build_status
 from task_lifecycle import (
     COMPLEXITIES,
     build_resume_packet,
@@ -32,7 +33,7 @@ Runner = Callable[..., subprocess.CompletedProcess[str]]
 def task_workspace_root(root: Path) -> Path:
     config = load_workspace_config(root)
     tasks = resolve_external_root(root, config, "tasks")
-    return tasks.path.parent
+    return tasks.path
 
 
 def require_task_write(root: Path, action: str) -> None:
@@ -42,7 +43,13 @@ def require_task_write(root: Path, action: str) -> None:
 
 
 def resolve_command(command: tuple[str, ...]) -> list[str]:
-    return [sys.executable if part == "{python}" else part for part in command]
+    resolved: list[str] = []
+    for part in command:
+        if part == "{python}":
+            resolved.extend((sys.executable, "-B"))
+        else:
+            resolved.append(part)
+    return resolved
 
 
 def run_steps(
@@ -83,9 +90,16 @@ def run_checks(root: Path, *, full: bool) -> int:
     return code
 
 
+def run_update_status(root: Path) -> int:
+    output = root / "WORKSPACE_STATUS.md"
+    output.write_text(build_status(root), encoding="utf-8", newline="\n")
+    print(f"Wrote {output}")
+    return 0
+
+
 def run_new(root: Path, task_name: str, *, dry_run: bool, complexity: str) -> int:
     require_task_write(root, "create task")
-    command = [sys.executable, "capabilities/tools/make_task.py", task_name]
+    command = [sys.executable, "-B", "capabilities/tools/make_task.py", task_name]
     if dry_run:
         command.append("--dry-run")
     command.extend(("--complexity", complexity))
@@ -157,7 +171,9 @@ def build_parser() -> argparse.ArgumentParser:
     new_parser.add_argument("--complexity", choices=COMPLEXITIES, default="standard")
 
     check_parser = subparsers.add_parser("check", help="run workspace checks")
-    check_parser.add_argument("--full", action="store_true", help="generate and verify maintenance reports")
+    check_parser.add_argument("--full", action="store_true", help="run extended read-only verification")
+
+    subparsers.add_parser("update-status", help="regenerate the tracked workspace status")
 
     subparsers.add_parser("status", help="list private task lifecycle state")
 
@@ -193,6 +209,8 @@ def main() -> int:
             return 1
     if args.command == "check":
         return run_checks(root, full=args.full)
+    if args.command == "update-status":
+        return run_update_status(root)
     if args.command == "status":
         return run_status(task_root)
     if args.command == "resume":
