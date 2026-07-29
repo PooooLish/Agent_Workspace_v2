@@ -287,11 +287,6 @@ def main() -> int:
     tasks = resolve_external_root(workspace_root, config, "tasks")
     tasks_root = tasks.path
     task_root = tasks_root / task_name
-    try:
-        require_writable_external_root(tasks, "create task")
-    except PermissionError as error:
-        print(f"Error: {error}.")
-        return 1
     if dry_run:
         print(f"Dry run: task directory would be created at {task_root}")
         print("Planned directories:")
@@ -304,6 +299,12 @@ def main() -> int:
             print(f"  + {task_root / 'docs' / 'superpowers' / 'README.md'}")
             print(f"  + {task_root / 'coordination' / 'contract.md'}")
         return 0
+
+    try:
+        require_writable_external_root(tasks, "create task")
+    except PermissionError as error:
+        print(f"Error: {error}.")
+        return 1
 
     try:
         created, skipped = scaffold_task(

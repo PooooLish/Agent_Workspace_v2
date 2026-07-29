@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Callable, Iterator
@@ -43,6 +44,7 @@ REQUIRED_ITEMS = (
     "storage/artifacts/README.md",
     "storage/archives/README.md",
     ".local/README.md",
+    "docs/framework",
     "docs/environments",
 )
 
@@ -71,6 +73,55 @@ LINK_SCAN_ROOTS = (
     "storage",
 )
 WINDOWS_REPARSE_POINT = 0x400
+SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def skill_frontmatter(path: Path) -> dict[str, str]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+    metadata: dict[str, str] = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return metadata
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        metadata[key.strip()] = value.strip().strip("\"'")
+    return {}
+
+
+def skill_issues(skills_root: Path) -> list[str]:
+    issues: list[str] = []
+    names: dict[str, str] = {}
+    for skill in sorted(skills_root.iterdir()) if skills_root.is_dir() else ():
+        if not skill.is_dir():
+            continue
+        if not SKILL_NAME_RE.fullmatch(skill.name):
+            issues.append(f"skill directory must use kebab-case: {skill.name}")
+        skill_file = skill / "SKILL.md"
+        if not skill_file.is_file():
+            issues.append(f"skill is missing SKILL.md: {skill.name}")
+            continue
+        metadata = skill_frontmatter(skill_file)
+        name = metadata.get("name", "")
+        description = metadata.get("description", "")
+        if not name:
+            issues.append(f"skill frontmatter is missing name: {skill.name}")
+        elif name != skill.name:
+            issues.append(
+                f"skill frontmatter name does not match directory: {skill.name} != {name}"
+            )
+        if not description:
+            issues.append(f"skill frontmatter is missing description: {skill.name}")
+        if name:
+            if name in names:
+                issues.append(
+                    f"duplicate skill name: {name} ({names[name]}, {skill.name})"
+                )
+            else:
+                names[name] = skill.name
+    return issues
 
 
 def git_tracked_files(root: Path) -> list[str]:
@@ -85,7 +136,8 @@ def git_tracked_files(root: Path) -> list[str]:
         env={**os.environ, "GIT_OPTIONAL_LOCKS": "0"},
     )
     if result.returncode != 0:
-        return []
+        detail = result.stderr.strip() if result.stderr else "unknown Git error"
+        raise RuntimeError(f"git ls-files failed: {detail}")
     return [item for item in result.stdout.split("\0") if item]
 
 
@@ -162,10 +214,8 @@ def check_workspace(root: Path) -> list[str]:
         if is_link_or_junction(path):
             issues.append(f"link or junction is not allowed in phase one: {path.relative_to(root)}")
 
-    skills_root = root / ".agents" / "skills"
-    for skill in skills_root.iterdir() if skills_root.is_dir() else ():
-        if skill.is_dir() and not (skill / "SKILL.md").is_file():
-            issues.append(f"skill is missing SKILL.md: {skill.name}")
+    skills_root = configured_path(root, config, "skills")
+    issues.extend(skill_issues(skills_root))
 
     tracked = set(git_tracked_files(root))
     for relative in tracked:
@@ -174,9 +224,17 @@ def check_workspace(root: Path) -> list[str]:
             if not normalized.endswith("/README.md"):
                 issues.append(f"private/runtime file is tracked: {normalized}")
 
+    tools_root = configured_path(root, config, "tools")
+    actual_tools = {
+        path.relative_to(root).as_posix()
+        for path in tools_root.glob("*.py")
+        if path.is_file()
+    }
     for relative in TOOL_DESCRIPTIONS:
         if not (root / relative).is_file():
             issues.append(f"registered tool is missing: {relative}")
+    for relative in actual_tools - set(TOOL_DESCRIPTIONS):
+        issues.append(f"Python tool is not registered: {relative}")
     return sorted(set(issues))
 
 

@@ -7,9 +7,12 @@ Use this SOP after broad workspace edits, before handoff, and periodically while
 1. Run `python -B capabilities/tools/workspace.py check` for a quick, read-only routine check.
 2. Run `python -B capabilities/tools/workspace.py check --full` before broad framework handoff.
 3. Review `WORKSPACE_STATUS.md` after a full check.
-4. Run `git ls-files tasks archives sandboxes` and confirm only intended public policy placeholders are tracked.
+4. Run `git ls-files runtime .local` and confirm only intended README contracts
+   are tracked from local or regenerable areas.
 5. Update root docs when the workspace structure, tools, SOPs, prompts, or safety model changes.
 6. Keep task-specific details inside task folders unless the knowledge is reusable across tasks.
+7. Do not recursively scan or modify the external tasks root during framework
+   maintenance.
 
 Task creation is disabled while the external tasks root is configured read-only.
 

@@ -29,7 +29,14 @@
   operations require explicit human approval.
 - Never run `sudo`, unknown installers, `curl | sh`, `git reset --hard`,
   `git clean`, or destructive checkout commands without explicit approval.
+- Do not modify global shell configuration files unless the user explicitly
+  requests that exact change.
+- Do not access `~/.ssh`, `~/.aws`, `~/.config`, or equivalent credential and
+  account directories without explicit, narrowly scoped authorization.
 - Do not create symbolic links or junctions to the source workspace.
+- Do not perform a whole-project refactor unless it is explicitly requested.
+- Before changing configuration, preserve a clear rollback path through Git
+  diff or an approved backup that contains no secrets.
 
 ## Work Loop
 

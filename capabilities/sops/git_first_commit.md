@@ -10,7 +10,8 @@ Use this SOP before creating the first workspace commit or any later broad struc
 4. Run `python -B capabilities/tools/prepare_first_commit_report.py`.
 5. Review `runtime/outputs/first_commit_recommendation.md`.
 6. Confirm that generated outputs, logs, dependency folders, raw media, and local secrets are ignored.
-7. Confirm that concrete task folders are ignored and `git ls-files tasks` only shows intended public placeholders.
+7. Run `git ls-files runtime .local` and confirm that only intended README
+   contracts are tracked from those local or regenerable areas.
 8. Stage only the intended baseline files.
 9. Run the checks again after staging if the staged set is broad.
 
@@ -20,7 +21,8 @@ Use this SOP before creating the first workspace commit or any later broad struc
 - Do not stage dependency folders such as `node_modules/`.
 - Do not stage raw media, generated renders, logs, caches, or temporary files unless explicitly intended.
 - Do not stage local backup files such as `*.bak`; keep the canonical file instead.
-- Concrete task files must not be staged in the workspace root repository. Publish an approved task only through an independent Git repository initialized inside that task directory.
+- External task files are outside the V2 Git candidate set. Publish an approved
+  task only through its independently reviewed repository.
 - Do not delete cleanup candidates without explicit approval.
 
 ## Expected report
@@ -32,4 +34,4 @@ End with:
 - baseline recommendation path
 - notable large files, if any
 - files or directories intentionally excluded
-- remaining private task or cleanup items
+- remaining external-boundary or cleanup items

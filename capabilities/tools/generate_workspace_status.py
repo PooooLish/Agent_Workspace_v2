@@ -4,20 +4,25 @@ from __future__ import annotations
 from pathlib import Path
 
 from workspace_manifest import CORE_MAINTENANCE_COMMANDS, TASK_LIFECYCLE_COMMANDS, TOOL_DESCRIPTIONS
-from workspace_paths import load_workspace_config, resolve_external_root, workspace_root
+from workspace_paths import (
+    configured_path,
+    load_workspace_config,
+    resolve_external_root,
+    workspace_root,
+)
 
 
-def markdown_items(root: Path, directory: str) -> list[str]:
+def markdown_items(root: Path, directory: Path) -> list[str]:
     return [
         f"- `{path.relative_to(root).as_posix()}`"
-        for path in sorted((root / directory).glob("*.md"))
+        for path in sorted(directory.glob("*.md"))
     ]
 
 
-def skill_items(root: Path) -> list[str]:
+def skill_items(root: Path, directory: Path) -> list[str]:
     return [
         f"- `{path.parent.relative_to(root).as_posix()}`"
-        for path in sorted((root / ".agents" / "skills").glob("*/SKILL.md"))
+        for path in sorted(directory.glob("*/SKILL.md"))
     ]
 
 
@@ -32,6 +37,11 @@ def tool_items(root: Path) -> list[str]:
 def build_status(root: Path) -> str:
     config = load_workspace_config(root)
     tasks = resolve_external_root(root, config, "tasks")
+    skills = configured_path(root, config, "skills")
+    sops = configured_path(root, config, "sops")
+    prompts = configured_path(root, config, "prompts")
+    framework_docs = configured_path(root, config, "framework_docs")
+    environment_docs = configured_path(root, config, "environment_docs")
     lines = [
         "# Workspace Status",
         "",
@@ -49,6 +59,12 @@ def build_status(root: Path) -> str:
         f"- External tasks access: `{tasks.access}`.",
         "- OS-level write isolation: not enforced by this configuration.",
         "",
+        "## Reserved Control Plane",
+        "",
+        "- `.workspace/policies/`, `profiles/`, `registry/`, and `schemas/` are reserved extension points.",
+        "- Their README files are documentation only; no policy engine, role system, registry loader, or schema enforcement is active.",
+        "- `AGENTS.md` and implemented tool checks remain the enforceable workspace controls.",
+        "",
         "## Core Commands",
         "",
         "```powershell",
@@ -64,19 +80,23 @@ def build_status(root: Path) -> str:
         "",
         "## Current Skills",
         "",
-        *skill_items(root),
+        *skill_items(root, skills),
         "",
         "## Current SOPs",
         "",
-        *markdown_items(root, "capabilities/sops"),
+        *markdown_items(root, sops),
         "",
         "## Current Prompts",
         "",
-        *markdown_items(root, "capabilities/prompts"),
+        *markdown_items(root, prompts),
+        "",
+        "## Current Framework Docs",
+        "",
+        *markdown_items(root, framework_docs),
         "",
         "## Environment Docs",
         "",
-        *markdown_items(root, "docs/environments"),
+        *markdown_items(root, environment_docs),
         "",
         "## Runtime Policy",
         "",

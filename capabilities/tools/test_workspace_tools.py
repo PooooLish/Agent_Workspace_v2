@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import io
+import os
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from pathlib import Path
 
+import audit_git_readiness
+import check_python_syntax
 import check_workspace
 import generate_workspace_status
 import make_task
+import prepare_first_commit_report
+import task_lifecycle
 import workspace
 from task_names import validate_task_name
 from workspace_manifest import FULL_ONLY_STEPS, QUICK_CHECK_STEPS, TOOL_DESCRIPTIONS
@@ -55,8 +64,205 @@ class TaskScaffoldTests(unittest.TestCase):
             self.assertTrue((task / "docs" / "superpowers" / "README.md").is_file())
             self.assertTrue((task / "coordination" / "contract.md").is_file())
 
+    def test_verification_stops_after_the_first_failed_command(self) -> None:
+        task = task_lifecycle.TaskRecord(
+            ROOT,
+            "example",
+            {"Verification commands": "first\nsecond\nthird"},
+        )
+        executed: list[str] = []
+
+        def runner(command: str, cwd: Path) -> int:
+            executed.append(command)
+            return 7 if command == "second" else 0
+
+        with redirect_stdout(io.StringIO()):
+            result = task_lifecycle.verify_task(
+                task,
+                run=True,
+                command_runner=runner,
+            )
+        self.assertEqual(result, 7)
+        self.assertEqual(executed, ["first", "second"])
+
+    def test_command_parser_uses_only_fenced_commands_when_a_fence_exists(self) -> None:
+        section = "Do not run this prose\n```powershell\npython -B test.py\n```\n"
+        self.assertEqual(
+            task_lifecycle.extract_commands(section),
+            ("python -B test.py",),
+        )
+
+    def test_close_task_updates_only_lifecycle_fields(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            tasks_root = Path(directory)
+            task_root = tasks_root / "example"
+            task_root.mkdir()
+            (task_root / "task.md").write_text(
+                """# Task: example
+
+## Status
+
+active
+
+## Complexity
+
+simple
+
+## Phase
+
+verification
+
+## Goal
+
+Finish the task.
+
+## Acceptance criteria
+
+The result is verified.
+
+## Verification commands
+
+python -B test.py
+
+## Decisions
+
+Keep the change small.
+
+## Progress
+
+Implementation complete.
+
+## Next action
+
+Close the task.
+
+## Blockers
+
+None
+""",
+                encoding="utf-8",
+            )
+            (task_root / "summary.md").write_text(
+                """# Summary: example
+
+## Goal
+
+Finish the task.
+
+## Outcome
+
+Completed.
+
+## Changes
+
+Updated the implementation.
+
+## Verification
+
+Passed.
+
+## Open issues
+
+None.
+""",
+                encoding="utf-8",
+            )
+            task_lifecycle.close_task(task_lifecycle.load_task(tasks_root, "example"))
+            sections = task_lifecycle.parse_sections(
+                (task_root / "task.md").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(sections["Status"], "completed")
+        self.assertEqual(sections["Phase"], "completed")
+        self.assertEqual(sections["Next action"], "None")
+        self.assertEqual(sections["Goal"], "Finish the task.")
+
+    def test_coordination_flags_independent_overlapping_paths(self) -> None:
+        text = """| ID | Dependencies | Owner | Worktree | Allowed paths | Verification | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | None | one | wt-a | src | test-a | pending |
+| B | None | two | wt-b | src/module | test-b | pending |
+"""
+        findings = task_lifecycle.coordination_findings(text)
+        self.assertTrue(any("overlapping Allowed paths" in item for item in findings))
+
 
 class V2IntegrationTests(unittest.TestCase):
+    def test_status_inventory_uses_configured_internal_paths(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            base = Path(directory)
+            skills = base / "skills"
+            sops = base / "sops"
+            prompts = base / "prompts"
+            environments = base / "environments"
+            (skills / "configured-skill").mkdir(parents=True)
+            (skills / "configured-skill" / "SKILL.md").write_text(
+                "---\nname: configured-skill\ndescription: test\n---\n",
+                encoding="utf-8",
+            )
+            for path in (sops, prompts, environments):
+                path.mkdir()
+                (path / "configured-marker.md").write_text("# Marker\n", encoding="utf-8")
+
+            config = deepcopy(load_workspace_config(ROOT))
+            for name, path in (
+                ("skills", skills),
+                ("sops", sops),
+                ("prompts", prompts),
+                ("environment_docs", environments),
+            ):
+                config["paths"][name] = path.relative_to(ROOT).as_posix()
+
+            with patch.object(
+                generate_workspace_status,
+                "load_workspace_config",
+                return_value=config,
+            ):
+                status = generate_workspace_status.build_status(ROOT)
+
+        self.assertIn("configured-skill", status)
+        self.assertEqual(status.count("configured-marker.md"), 3)
+
+    def test_syntax_checker_uses_configured_tools_path_by_default(self) -> None:
+        config = deepcopy(load_workspace_config(ROOT))
+        config["paths"]["tools"] = "runtime/tmp/configured-tools"
+        self.assertEqual(
+            check_python_syntax.default_targets(ROOT, config),
+            [ROOT / "runtime" / "tmp" / "configured-tools"],
+        )
+
+    def test_first_commit_report_output_stays_in_configured_outputs(self) -> None:
+        expected = ROOT / "runtime" / "outputs" / "report.md"
+        self.assertEqual(
+            prepare_first_commit_report.resolve_report_output(ROOT, "report.md"),
+            expected,
+        )
+        for unsafe in ("../outside.md", str(ROOT.parent / "outside.md")):
+            with self.subTest(unsafe=unsafe):
+                with self.assertRaisesRegex(ValueError, "output path"):
+                    prepare_first_commit_report.resolve_report_output(ROOT, unsafe)
+
+    def test_git_readiness_fails_when_git_candidate_enumeration_fails(self) -> None:
+        failure = SimpleNamespace(returncode=128, stderr="fatal: probe", stdout="")
+        with patch.object(audit_git_readiness, "run_git", return_value=failure):
+            with self.assertRaisesRegex(RuntimeError, "git ls-files failed"):
+                audit_git_readiness.candidate_files(ROOT)
+
+    def test_git_readiness_fails_when_candidate_content_cannot_be_read(self) -> None:
+        candidate = ROOT / "unreadable-candidate.txt"
+        with (
+            patch.object(audit_git_readiness, "is_probably_text", return_value=True),
+            patch.object(Path, "open", side_effect=OSError("access denied")),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "cannot scan Git candidate"):
+                audit_git_readiness.has_secret_content(candidate)
+
+    def test_workspace_check_fails_when_tracked_files_cannot_be_enumerated(self) -> None:
+        failure = SimpleNamespace(returncode=128, stderr="fatal: probe", stdout="")
+        with patch.object(check_workspace.subprocess, "run", return_value=failure):
+            with self.assertRaisesRegex(RuntimeError, "git ls-files failed"):
+                check_workspace.git_tracked_files(ROOT)
+
     def test_python_steps_disable_bytecode_writes(self) -> None:
         command = workspace.resolve_command(("{python}", "example.py"))
         self.assertEqual(command, [sys.executable, "-B", "example.py"])
@@ -92,6 +298,27 @@ class V2IntegrationTests(unittest.TestCase):
 
     def test_workspace_structure_contract(self) -> None:
         self.assertEqual(check_workspace.check_workspace(ROOT), [])
+
+    def test_workspace_check_validates_skill_metadata(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            skills = Path(directory) / "skills"
+            skill = skills / "Bad_Name"
+            skill.mkdir(parents=True)
+            (skill / "SKILL.md").write_text(
+                "---\nname: different-name\n---\n",
+                encoding="utf-8",
+            )
+            config = deepcopy(load_workspace_config(ROOT))
+            config["paths"]["skills"] = skills.relative_to(ROOT).as_posix()
+            with (
+                patch.object(check_workspace, "load_workspace_config", return_value=config),
+                patch.object(check_workspace, "git_tracked_files", return_value=[]),
+            ):
+                issues = check_workspace.check_workspace(ROOT)
+
+        self.assertTrue(any("kebab-case" in issue for issue in issues))
+        self.assertTrue(any("name does not match" in issue for issue in issues))
+        self.assertTrue(any("missing description" in issue for issue in issues))
 
     def test_ci_checks_windows_and_linux(self) -> None:
         workflow = ROOT / ".github" / "workflows" / "workspace-check.yml"
@@ -137,6 +364,17 @@ class V2IntegrationTests(unittest.TestCase):
         self.assertFalse(any(part.startswith("tools/") for part in commands))
         self.assertTrue(all(path.startswith("capabilities/tools/") for path in TOOL_DESCRIPTIONS))
 
+    def test_every_python_tool_is_registered(self) -> None:
+        tool_files = {
+            path.relative_to(ROOT).as_posix()
+            for path in (ROOT / "capabilities" / "tools").glob("*.py")
+        }
+        self.assertEqual(set(TOOL_DESCRIPTIONS), tool_files)
+
+    def test_first_commit_report_contains_no_v1_task_root_policy(self) -> None:
+        excluded_paths = {path for path, _ in prepare_first_commit_report.EXCLUDE_NOTES}
+        self.assertNotIn("tasks/*", excluded_paths)
+
     def test_full_check_verifies_status_without_regenerating_it(self) -> None:
         commands = [part for step in FULL_ONLY_STEPS for part in step.command]
         self.assertIn("capabilities/tools/verify_workspace_status.py", commands)
@@ -160,6 +398,31 @@ class V2IntegrationTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 1)
                 self.assertIn("read-only", result.stdout)
+
+    def test_new_dry_run_is_allowed_for_a_read_only_external_root(self) -> None:
+        tasks_root = TMP_ROOT / "dry-run-external-root"
+        task_root = tasks_root / "dry-run-preview"
+        self.assertFalse(task_root.exists())
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-B",
+                "capabilities/tools/workspace.py",
+                "new",
+                "dry-run-preview",
+                "--dry-run",
+            ],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env={**os.environ, "AGENT_TASKS_ROOT": str(tasks_root)},
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Dry run:", result.stdout)
+        self.assertFalse(task_root.exists())
 
     def test_external_tasks_override_does_not_change_access(self) -> None:
         config = load_workspace_config(ROOT)
@@ -189,6 +452,9 @@ class V2IntegrationTests(unittest.TestCase):
             second = generate_workspace_status.build_status(ROOT)
         self.assertEqual(first, second)
         self.assertIn("External tasks access: `read_only`", first)
+        self.assertIn("## Reserved Control Plane", first)
+        self.assertIn("## Current Framework Docs", first)
+        self.assertIn("docs/framework/task-lifecycle.md", first)
         self.assertNotIn("External tasks available:", first)
         self.assertNotIn("External tasks source:", first)
 
@@ -200,6 +466,55 @@ class V2IntegrationTests(unittest.TestCase):
         text = (ROOT / ".codex" / "config.toml").read_text(encoding="utf-8")
         for legacy in ("tools/", "prompts/", "sops/", "outputs/", "logs/", "tmp/", "envs/", "archives/"):
             self.assertNotIn(legacy, text)
+
+    def test_v2_operating_docs_contain_no_root_private_area_checks(self) -> None:
+        for relative in (
+            "capabilities/sops/git_first_commit.md",
+            "capabilities/sops/workspace_maintenance.md",
+        ):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            self.assertNotIn("git ls-files tasks", text)
+            self.assertNotIn("tasks archives sandboxes", text)
+
+    def test_new_task_sop_uses_contiguous_numbering(self) -> None:
+        text = (ROOT / "capabilities" / "sops" / "new_task.md").read_text(
+            encoding="utf-8"
+        )
+        numbers = [
+            int(match.group(1))
+            for match in re.finditer(r"^(\d+)\. ", text, re.MULTILINE)
+        ]
+        self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
+
+    def test_framework_docs_match_current_check_behavior(self) -> None:
+        efficiency = (
+            ROOT / "docs" / "framework" / "workspace-efficiency.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("regenerate and\nverify `WORKSPACE_STATUS.md`", efficiency)
+        self.assertIn("verify `WORKSPACE_STATUS.md` without rewriting it", efficiency)
+
+    def test_v2_docs_preserve_common_safety_and_lifecycle_contracts(self) -> None:
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        for required in (
+            "global shell configuration",
+            "~/.ssh",
+            "whole-project refactor",
+        ):
+            self.assertIn(required, agents)
+
+        lifecycle = (
+            ROOT / "docs" / "framework" / "task-lifecycle.md"
+        ).read_text(encoding="utf-8")
+        for heading in (
+            "## Complexity Levels",
+            "## State Ownership",
+            "## Verification Safety",
+            "## Closeout Boundary",
+        ):
+            self.assertIn(heading, lifecycle)
+
+        guide = (ROOT / "WORKSPACE_GUIDE.md").read_text(encoding="utf-8")
+        self.assertIn("## Common Operating Principles", guide)
 
     def test_no_forbidden_source_assets_were_copied(self) -> None:
         for relative in (

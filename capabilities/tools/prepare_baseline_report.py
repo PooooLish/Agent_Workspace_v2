@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-from workspace_paths import workspace_root
+from workspace_paths import configured_path, load_workspace_config, workspace_root
 
 
 def load_legacy_report_tool(root: Path):
-    path = root / "capabilities" / "tools" / "prepare_first_commit_report.py"
+    config = load_workspace_config(root)
+    path = configured_path(root, config, "tools") / "prepare_first_commit_report.py"
     spec = importlib.util.spec_from_file_location("prepare_first_commit_report", path)
     if spec is None or spec.loader is None:
         raise RuntimeError("Cannot load capabilities/tools/prepare_first_commit_report.py")

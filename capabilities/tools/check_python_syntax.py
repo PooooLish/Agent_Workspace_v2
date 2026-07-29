@@ -3,8 +3,13 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Mapping
 
-from workspace_paths import workspace_root
+from workspace_paths import configured_path, load_workspace_config, workspace_root
+
+
+def default_targets(root: Path, config: Mapping[str, object]) -> list[Path]:
+    return [configured_path(root, config, "tools")]
 
 
 def python_files(targets: list[Path]) -> list[Path]:
@@ -32,7 +37,7 @@ def main() -> int:
     parser.add_argument("paths", nargs="*", type=Path)
     args = parser.parse_args()
     root = workspace_root()
-    targets = args.paths or [root / "capabilities" / "tools"]
+    targets = args.paths or default_targets(root, load_workspace_config(root))
     errors = check_syntax([path.resolve() for path in targets])
     if errors:
         print("Python syntax check failed:")

@@ -13,6 +13,7 @@
     "sandboxes": "runtime/sandboxes",
     "artifacts": "storage/artifacts",
     "archives": "storage/archives",
+    "framework_docs": "docs/framework",
     "environment_docs": "docs/environments",
     "local_envs": ".local/envs",
     "local_secrets": ".local/secrets"

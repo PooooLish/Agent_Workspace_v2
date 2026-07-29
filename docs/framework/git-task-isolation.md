@@ -1,18 +1,45 @@
 # Git And Task Isolation
 
-V2 is independent from the source workspace. It neither copies task assets nor
-uses links or junctions to expose them.
+## Decision
 
-The external task root is declared in `.workspace/config.json` with
-`access: read_only`. Tools may show task state, but mutating task commands must
-call the centralized permission guard before loading or executing task content.
+V2 is an independent framework repository. It does not copy task assets or use
+links and junctions to expose them. The source workspace and its nested task
+repositories remain separate ownership domains.
 
-Source-protection baselines are stored under
-`runtime/runs/source-baseline/`. They record root Git state, task path and file
-hash inventories, nested repository state, and volatile-file paths. Any
-difference between before and after baselines requires investigation; tools must
-not repair the source automatically.
+## Boundaries
 
-V2 Git audits must run with V2 as their working directory. Nested repositories
-under the external task root are separate repositories and remain outside V2
-maintenance scope.
+- V2 Git owns `.workspace/`, reusable capabilities, adapters, framework docs,
+  runtime README contracts, and durable V2 storage.
+- The external task root is resolved through `.workspace/config.json` and is
+  `read_only` in phase one.
+- V2 checks must not stage, recursively scan, format, or modify external tasks.
+- Nested repositories under the external root are not V2 submodules and remain
+  outside V2 maintenance.
+- Generated runtime data and machine-local credentials remain ignored.
+
+## Source Protection
+
+Source-protection baselines belong under `runtime/runs/source-baseline/`. A
+baseline may record root Git state, task path and file hashes, nested repository
+state, and volatile-file paths. Any before/after difference requires
+investigation. V2 tools must not repair the source automatically with reset,
+checkout, clean, deletion, or force operations.
+
+## V2 Publication Gate
+
+Before committing or pushing the V2 framework:
+
+1. Run `python -B capabilities/tools/workspace.py check --full`.
+2. Inspect staged files and outgoing commits.
+3. Confirm `runtime/` and `.local/` contain no tracked local state beyond
+   intended README contracts.
+4. Confirm no external task, secret, cache, worktree, or source snapshot is in
+   the candidate set.
+5. Push only after the destination and scope are explicitly confirmed.
+
+## Independent Task Publication
+
+If an external task is deliberately published later, treat its repository as an
+independent project. Review its complete candidate list, secret scan, local
+ignore rules, large files, and destination repository. Publishing a task never
+requires adding its contents to the V2 repository.

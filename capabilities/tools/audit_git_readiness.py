@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
-import sys
 from pathlib import Path
 from workspace_paths import workspace_root
 
@@ -89,10 +88,8 @@ def run_git(root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
 def candidate_files(root: Path) -> list[Path]:
     result = run_git(root, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"])
     if result.returncode != 0:
-        print("Error: git ls-files failed.", file=sys.stderr)
-        if result.stderr:
-            print(result.stderr.strip(), file=sys.stderr)
-        return []
+        detail = result.stderr.strip() if result.stderr else "unknown Git error"
+        raise RuntimeError(f"git ls-files failed: {detail}")
 
     paths: list[Path] = []
     for raw in result.stdout.split("\0"):
@@ -115,8 +112,8 @@ def is_sensitive_name(relative_path: str) -> bool:
 def is_probably_text(path: Path) -> bool:
     try:
         chunk = path.read_bytes()[:4096]
-    except OSError:
-        return False
+    except OSError as error:
+        raise RuntimeError(f"cannot inspect Git candidate {path}: {error}") from error
     return b"\0" not in chunk
 
 
@@ -150,8 +147,8 @@ def has_secret_content(path: Path) -> list[str]:
                         findings.append(name)
                         break
                 overlap = combined[-CONTENT_SCAN_OVERLAP_BYTES:]
-    except OSError:
-        return []
+    except OSError as error:
+        raise RuntimeError(f"cannot scan Git candidate {path}: {error}") from error
     return findings
 
 

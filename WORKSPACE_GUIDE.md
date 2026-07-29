@@ -21,6 +21,11 @@ AGENT_WORKSPACE_V2/
 
 `.workspace/` contains the path map, external-root access policy, and minimal
 future extension points. It is not a framework competing with Codex.
+The `policies/`, `profiles/`, `registry/`, and `schemas/` subdirectories are
+reserved placeholders in phase one. Their README files do not activate a policy
+engine, multi-agent role system, registry loader, or schema enforcement.
+Only `AGENTS.md`, `.workspace/config.json`, and implemented tool checks currently
+affect behavior.
 
 `.agents/skills/` contains reusable Codex skills. Do not duplicate skill bodies
 under `capabilities/`.
@@ -39,6 +44,23 @@ durable historical or normative material, not caches.
 `.local/envs/` and `.local/secrets/` are ignored and outside the default Agent
 read scope. Reproducible environment definitions should live in a future
 tracked infrastructure area, not under `.local/`.
+
+## Common Operating Principles
+
+These principles are shared with the source workspace even though V2 uses a
+different directory layout:
+
+- Safety rules outrank tasks, Skills, prompts, profiles, and autonomous judgment.
+- Nested rules may tighten but never weaken the root safety rules.
+- Skills match reusable intent, SOPs define procedures, prompts provide
+  non-authoritative templates, and task notes stay with their owning task.
+- Simple changes use a short conversational plan and no standalone spec.
+- Standard work records durable state only when it improves recovery.
+- Complex or multi-agent work may use task-local plans and coordination
+  contracts.
+- Verification evidence is required before completion claims.
+- Publishing, archiving, deleting, executing task commands, and changing access
+  policy are separate actions requiring explicit scope and approval.
 
 ## External Tasks
 
@@ -63,6 +85,10 @@ Permission remains controlled by the configuration.
 Tools must use `workspace_paths.resolve_external_root()`. Phase-one scanners may
 check availability and read task metadata only when explicitly invoked; they
 must not recursively scan the external root during normal workspace checks.
+
+`new --dry-run` may preview a task target without changing access. Actual task
+creation, command execution, and closeout remain disabled until the ownership
+model, applicable root rules, source baseline, and rollback path are reviewed.
 
 ## Adapter Boundaries
 

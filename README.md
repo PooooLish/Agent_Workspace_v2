@@ -26,6 +26,16 @@ python -B capabilities/tools/workspace.py doctor
 - `.local/`：本机环境和凭据，默认禁止读取并由 Git 忽略
 - `docs/`：框架与环境文档
 
+## 工作方式
+
+- `AGENTS.md` 是强制规则；Skill、SOP 和 Prompt 都不能降低其安全要求。
+- Skill 用于按意图匹配可复用能力，SOP 用于直接执行固定流程，Prompt 只是非强制模板。
+- 简单任务只需简短对话计划；复杂或多 Agent 任务才使用任务内计划与协调契约。
+- `workspace.py check --full` 只验证状态，不自动重写文档；需要更新清单时显式运行
+  `workspace.py update-status`。
+- 外部任务默认只读。`new --dry-run` 可以预览，新建、执行命令和关闭任务仍被阻止。
+- 发布 V2 或独立任务前，分别检查候选文件、密钥、私有数据、大文件和目标仓库。
+
 完整设计与维护规则见 [WORKSPACE_GUIDE.md](WORKSPACE_GUIDE.md)，Agent 顶层规则
 见 [AGENTS.md](AGENTS.md)，当前状态见 [WORKSPACE_STATUS.md](WORKSPACE_STATUS.md)。
 
@@ -51,6 +61,21 @@ python -B capabilities/tools/workspace.py doctor
 `../agent_workspace/tasks` with `read_only` access. Read-only views work, while
 task creation, verification execution, and task closeout are blocked.
 `AGENT_TASKS_ROOT` may override the location but not its access policy.
+
+## Operating Model
+
+- `AGENTS.md` is mandatory; Skills, SOPs, and prompts cannot weaken its safety
+  rules.
+- Skills match reusable intent, SOPs define direct procedures, and prompts are
+  non-authoritative templates.
+- Simple work uses a short conversational plan. Complex or multi-agent work may
+  use task-local plans and coordination contracts.
+- `workspace.py check --full` verifies tracked status without rewriting it. Run
+  `workspace.py update-status` explicitly when the inventory changes.
+- External tasks are read-only by default. `new --dry-run` previews a target;
+  creation, command execution, and closeout remain blocked.
+- Review candidates, secrets, private data, large files, and the destination
+  repository separately before publishing V2 or an independent task.
 
 See [WORKSPACE_GUIDE.md](WORKSPACE_GUIDE.md) for architecture and maintenance,
 [AGENTS.md](AGENTS.md) for mandatory Agent rules, and

@@ -19,6 +19,7 @@ from task_lifecycle import (
 )
 from workspace_manifest import FULL_ONLY_STEPS, QUICK_CHECK_STEPS, StepSpec
 from workspace_paths import (
+    configured_path,
     load_workspace_config,
     require_writable_external_root,
     resolve_external_root,
@@ -98,8 +99,15 @@ def run_update_status(root: Path) -> int:
 
 
 def run_new(root: Path, task_name: str, *, dry_run: bool, complexity: str) -> int:
-    require_task_write(root, "create task")
-    command = [sys.executable, "-B", "capabilities/tools/make_task.py", task_name]
+    if not dry_run:
+        require_task_write(root, "create task")
+    config = load_workspace_config(root)
+    command = [
+        sys.executable,
+        "-B",
+        str(configured_path(root, config, "tools") / "make_task.py"),
+        task_name,
+    ]
     if dry_run:
         command.append("--dry-run")
     command.extend(("--complexity", complexity))
