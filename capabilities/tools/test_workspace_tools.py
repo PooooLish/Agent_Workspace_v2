@@ -628,6 +628,22 @@ class V2IntegrationTests(unittest.TestCase):
         self.assertNotIn("External tasks available:", first)
         self.assertNotIn("External tasks source:", first)
 
+    def test_markdown_inventory_uses_portable_casefolded_order(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            docs = Path(directory)
+            (docs / "aider.md").write_text("# Aider\n", encoding="utf-8")
+            (docs / "README.md").write_text("# Readme\n", encoding="utf-8")
+
+            items = generate_workspace_status.markdown_items(ROOT, docs)
+
+        self.assertEqual(
+            items,
+            [
+                f"- `{(docs / 'aider.md').relative_to(ROOT).as_posix()}`",
+                f"- `{(docs / 'README.md').relative_to(ROOT).as_posix()}`",
+            ],
+        )
+
     def test_workspace_parser_has_explicit_status_update_command(self) -> None:
         args = workspace.build_parser().parse_args(["update-status"])
         self.assertEqual(args.command, "update-status")

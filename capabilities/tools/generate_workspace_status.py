@@ -20,14 +20,20 @@ from workspace_paths import (
 def markdown_items(root: Path, directory: Path) -> list[str]:
     return [
         f"- `{path.relative_to(root).as_posix()}`"
-        for path in sorted(directory.glob("*.md"))
+        for path in sorted(
+            directory.glob("*.md"),
+            key=lambda item: item.relative_to(root).as_posix().casefold(),
+        )
     ]
 
 
 def skill_items(root: Path, directory: Path) -> list[str]:
     return [
         f"- `{path.parent.relative_to(root).as_posix()}`"
-        for path in sorted(directory.glob("*/SKILL.md"))
+        for path in sorted(
+            directory.glob("*/SKILL.md"),
+            key=lambda item: item.relative_to(root).as_posix().casefold(),
+        )
     ]
 
 
