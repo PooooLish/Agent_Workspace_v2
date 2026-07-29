@@ -3,17 +3,18 @@
 .local/secrets/**
 
 # Runtime state; keep only directory contracts
-runtime/task-state/**
-runtime/runs/**
-runtime/outputs/**
-runtime/logs/**
-runtime/tmp/**
-runtime/sandboxes/**
+runtime/**
+!runtime/task-state/
 !runtime/task-state/README.md
+!runtime/runs/
 !runtime/runs/README.md
+!runtime/outputs/
 !runtime/outputs/README.md
+!runtime/logs/
 !runtime/logs/README.md
+!runtime/tmp/
 !runtime/tmp/README.md
+!runtime/sandboxes/
 !runtime/sandboxes/README.md
 
 # Local projects are managed independently from the workspace repository

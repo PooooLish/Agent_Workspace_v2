@@ -272,6 +272,33 @@ class ScaffoldTests(unittest.TestCase):
             issues,
         )
 
+    def test_runtime_gitignore_is_default_deny_with_contract_allowlist(self) -> None:
+        ignored = subprocess.run(
+            [
+                "git",
+                "check-ignore",
+                "--no-index",
+                "--quiet",
+                "runtime/installers/future-installer.bin",
+            ],
+            cwd=ROOT,
+            check=False,
+        )
+        contract = subprocess.run(
+            [
+                "git",
+                "check-ignore",
+                "--no-index",
+                "--quiet",
+                "runtime/tmp/README.md",
+            ],
+            cwd=ROOT,
+            check=False,
+        )
+
+        self.assertEqual(ignored.returncode, 0)
+        self.assertEqual(contract.returncode, 1)
+
     def test_verification_stops_after_the_first_failed_command(self) -> None:
         task = task_lifecycle.TaskRecord(
             ROOT,
