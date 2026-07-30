@@ -11,10 +11,8 @@ Use this SOP after broad workspace edits, before handoff, and periodically while
    are tracked from local or regenerable areas.
 5. Update root docs when the workspace structure, tools, SOPs, prompts, or safety model changes.
 6. Keep task-specific details inside task folders unless the knowledge is reusable across tasks.
-7. Do not recursively scan or modify the external tasks root during framework
-   maintenance.
-
-Task creation is disabled while the external tasks root is configured read-only.
+7. Do not recursively scan concrete `projects/` contents or the legacy external
+   tasks root during framework maintenance.
 
 ## When To Run
 
@@ -41,4 +39,4 @@ End with:
 - workspace status freshness result
 - line ending drift reminders, if any
 - strict large-file reminders, if any
-- private task tracking check
+- concrete task and project tracking check

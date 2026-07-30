@@ -15,7 +15,7 @@ from workspace_paths import (
     resolve_external_root,
     workspace_root,
 )
-from workspace import require_task_write, task_workspace_root
+from workspace import task_workspace_root
 from task_lifecycle import discover_task_names, load_task
 from make_task import build_task_md
 
@@ -60,11 +60,11 @@ class WorkspacePathTests(unittest.TestCase):
         with self.assertRaisesRegex(PermissionError, "read-only"):
             require_writable_external_root(external, "create task")
 
-    def test_task_commands_resolve_the_external_workspace_root(self) -> None:
+    def test_task_commands_resolve_the_local_projects_root(self) -> None:
         with patch.dict(os.environ, {"AGENT_TASKS_ROOT": ""}):
             self.assertEqual(
                 task_workspace_root(ROOT),
-                (ROOT / "../agent_workspace/tasks").resolve(),
+                (ROOT / "projects").resolve(),
             )
 
     def test_lifecycle_uses_an_overridden_tasks_root_with_any_name(self) -> None:
@@ -85,11 +85,18 @@ class WorkspacePathTests(unittest.TestCase):
         self.assertEqual(names, ["example"])
         self.assertEqual(task.root, task_root)
 
-    def test_mutating_task_commands_are_blocked(self) -> None:
-        for action in ("create task", "run task verification", "close task"):
-            with self.subTest(action=action):
-                with self.assertRaisesRegex(PermissionError, "read-only"):
-                    require_task_write(ROOT, action)
+    def test_project_discovery_ignores_non_task_project_directories(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT / "runtime" / "tmp") as directory:
+            projects_root = Path(directory)
+            (projects_root / "plain-project").mkdir()
+            task_root = projects_root / "tracked-task"
+            task_root.mkdir()
+            (task_root / "task.md").write_text(
+                build_task_md("tracked-task", "standard"),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(discover_task_names(projects_root), ["tracked-task"])
 
 
 if __name__ == "__main__":

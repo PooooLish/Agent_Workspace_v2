@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from workspace_manifest import CORE_MAINTENANCE_COMMANDS, TASK_LIFECYCLE_COMMANDS, TOOL_DESCRIPTIONS
+from workspace_manifest import (
+    CORE_MAINTENANCE_COMMANDS,
+    PROJECT_COMMANDS,
+    TASK_LIFECYCLE_COMMANDS,
+    TOOL_DESCRIPTIONS,
+)
 from workspace_paths import (
     configured_path,
     load_workspace_config,
@@ -15,14 +20,20 @@ from workspace_paths import (
 def markdown_items(root: Path, directory: Path) -> list[str]:
     return [
         f"- `{path.relative_to(root).as_posix()}`"
-        for path in sorted(directory.glob("*.md"))
+        for path in sorted(
+            directory.glob("*.md"),
+            key=lambda item: item.relative_to(root).as_posix().casefold(),
+        )
     ]
 
 
 def skill_items(root: Path, directory: Path) -> list[str]:
     return [
         f"- `{path.parent.relative_to(root).as_posix()}`"
-        for path in sorted(directory.glob("*/SKILL.md"))
+        for path in sorted(
+            directory.glob("*/SKILL.md"),
+            key=lambda item: item.relative_to(root).as_posix().casefold(),
+        )
     ]
 
 
@@ -56,7 +67,7 @@ def build_status(root: Path) -> str:
         "## Current Health",
         "",
         "- Layout: isolated V2 control plane and capability directories.",
-        f"- External tasks access: `{tasks.access}`.",
+        f"- Legacy external tasks access: `{tasks.access}`.",
         "- OS-level write isolation: not enforced by this configuration.",
         "",
         "## Reserved Control Plane",
@@ -72,7 +83,35 @@ def build_status(root: Path) -> str:
         *CORE_MAINTENANCE_COMMANDS,
         "```",
         "",
-        "Task creation, verification execution, and closeout are disabled while the external task root is read-only.",
+        "Current task lifecycle commands operate under `projects/`; the legacy external task root remains read-only.",
+        "",
+        "## Local Task And Project Policy",
+        "",
+        "- The workspace repository tracks only `projects/README.md` under `projects/`.",
+        "- Concrete task and project directories are local and ignored by the workspace repository.",
+        "- Archived or abandoned projects live under `storage/archives/projects/` and remain local.",
+        "- Runtime state, artifact contents, and archive contents are not tracked by the workspace repository.",
+        "- Long-lived or publishable concrete work should use an independent Git repository after explicit approval.",
+        "- Task and project scaffolding do not initialize Git, install dependencies, or publish files.",
+        "- Task scaffolding uses only workspace-root Skills and does not create private Skill directories.",
+        "",
+        "```powershell",
+        *PROJECT_COMMANDS,
+        "```",
+        "",
+        "## Review Proportionality",
+        "",
+        "- Simple work uses a short conversational plan, focused verification, one self-review, and a concise report.",
+        "- Simple work does not require standalone specifications, implementation plans, or repeated human review gates.",
+        "- Formal planning and review remain appropriate for high-risk, cross-module, long-running, destructive, or multi-agent work.",
+        "",
+        "## Open Source Intake",
+        "",
+        "- Research current open-source repositories and authoritative documentation before implementing a new software project.",
+        "- Record source/version, license, maintenance, security, fit, reuse boundary, and a `greenfield`, `reference`, `integrate`, or `fork` decision.",
+        "- Simple projects may use a concise assessment without repeated human review.",
+        "- Cloning, downloading, dependency installation, code copying, and forking require explicit approval.",
+        "- Missing, ambiguous, or incompatible licensing prohibits code reuse.",
         "",
         "## Current Tools",
         "",
@@ -101,6 +140,7 @@ def build_status(root: Path) -> str:
         "## Runtime Policy",
         "",
         "- `runtime/` contains generated and locally disposable state; only directory README files are trackable.",
+        "- `storage/` contains durable local data; only directory README contracts are trackable.",
         "- `.local/envs/` and `.local/secrets/` are local-only and ignored.",
         "- No task, Superpowers snapshot, worktree, secret, output, log, or cache was copied from the source workspace.",
         "",

@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from generate_workspace_status import build_status
+from make_project import scaffold_project, validate_project_target
+from make_task import scaffold_task, validate_task_target
 from task_lifecycle import (
     COMPLEXITIES,
     build_resume_packet,
@@ -21,8 +23,6 @@ from workspace_manifest import FULL_ONLY_STEPS, QUICK_CHECK_STEPS, StepSpec
 from workspace_paths import (
     configured_path,
     load_workspace_config,
-    require_writable_external_root,
-    resolve_external_root,
     workspace_root,
 )
 
@@ -33,14 +33,7 @@ Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 def task_workspace_root(root: Path) -> Path:
     config = load_workspace_config(root)
-    tasks = resolve_external_root(root, config, "tasks")
-    return tasks.path
-
-
-def require_task_write(root: Path, action: str) -> None:
-    config = load_workspace_config(root)
-    tasks = resolve_external_root(root, config, "tasks")
-    require_writable_external_root(tasks, action)
+    return configured_path(root, config, "projects")
 
 
 def resolve_command(command: tuple[str, ...]) -> list[str]:
@@ -99,19 +92,49 @@ def run_update_status(root: Path) -> int:
 
 
 def run_new(root: Path, task_name: str, *, dry_run: bool, complexity: str) -> int:
-    if not dry_run:
-        require_task_write(root, "create task")
-    config = load_workspace_config(root)
-    command = [
-        sys.executable,
-        "-B",
-        str(configured_path(root, config, "tools") / "make_task.py"),
-        task_name,
-    ]
+    projects_root = task_workspace_root(root)
+    task_root = validate_task_target(projects_root, task_name)
     if dry_run:
-        command.append("--dry-run")
-    command.extend(("--complexity", complexity))
-    return subprocess.run(command, cwd=root, check=False).returncode
+        print(f"Dry run: task directory would be created at {task_root}")
+        print("Git initialization, dependency installation, and publishing are excluded.")
+        return 0
+
+    created, skipped = scaffold_task(
+        projects_root,
+        task_name,
+        complexity=complexity,
+    )
+    print("Created items:")
+    for item in created:
+        print(f"  + {item}")
+    print("Skipped existing items:")
+    for item in skipped:
+        print(f"  = {item}")
+    print(f"Task directory ready: {task_root}")
+    print("Git was not initialized.")
+    return 0
+
+
+def run_project_new(root: Path, project_name: str, *, dry_run: bool) -> int:
+    config = load_workspace_config(root)
+    projects_root = configured_path(root, config, "projects")
+    project_root = projects_root / project_name
+    if dry_run:
+        project_root = validate_project_target(projects_root, project_name)
+        print(f"Dry run: project directory would be created at {project_root}")
+        print("Git initialization, dependency installation, and publishing are excluded.")
+        return 0
+
+    created, skipped = scaffold_project(projects_root, project_name)
+    print("Created items:")
+    for item in created:
+        print(f"  + {item}")
+    print("Skipped existing items:")
+    for item in skipped:
+        print(f"  = {item}")
+    print(f"Project directory ready: {project_root}")
+    print("Git was not initialized.")
+    return 0
 
 
 def compact_field(value: str, width: int, *, fallback: str = "unknown") -> str:
@@ -124,7 +147,7 @@ def compact_field(value: str, width: int, *, fallback: str = "unknown") -> str:
 def run_status(root: Path) -> int:
     names = discover_task_names(root)
     if not names:
-        print("No private task directories found.")
+        print("No lifecycle-managed task directories found under projects.")
         return 0
     print(f"{'Task':<28} {'Status':<12} {'Complexity':<12} {'Phase':<16} Next action")
     print("-" * 112)
@@ -149,7 +172,7 @@ def run_status(root: Path) -> int:
 def run_doctor(root: Path, task_name: str | None) -> int:
     names = [task_name] if task_name else discover_task_names(root)
     if not names:
-        print("No private task directories found.")
+        print("No lifecycle-managed task directories found under projects.")
         return 0
     finding_count = 0
     for name in names:
@@ -173,17 +196,29 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Manage tasks and check the agent workspace.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    new_parser = subparsers.add_parser("new", help="create a private task scaffold")
+    new_parser = subparsers.add_parser("new", help="create a task scaffold under projects")
     new_parser.add_argument("task_name")
     new_parser.add_argument("--dry-run", action="store_true")
     new_parser.add_argument("--complexity", choices=COMPLEXITIES, default="standard")
+
+    project_parser = subparsers.add_parser("project", help="manage local projects")
+    project_subparsers = project_parser.add_subparsers(
+        dest="project_command",
+        required=True,
+    )
+    project_new_parser = project_subparsers.add_parser(
+        "new",
+        help="create a local project scaffold without initializing Git",
+    )
+    project_new_parser.add_argument("project_name")
+    project_new_parser.add_argument("--dry-run", action="store_true")
 
     check_parser = subparsers.add_parser("check", help="run workspace checks")
     check_parser.add_argument("--full", action="store_true", help="run extended read-only verification")
 
     subparsers.add_parser("update-status", help="regenerate the tracked workspace status")
 
-    subparsers.add_parser("status", help="list private task lifecycle state")
+    subparsers.add_parser("status", help="list current task lifecycle state under projects")
 
     resume_parser = subparsers.add_parser("resume", help="print a compact task recovery packet")
     resume_parser.add_argument("task_name")
@@ -203,7 +238,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     root = workspace_root()
     args = build_parser().parse_args()
-    task_root = task_workspace_root(root)
+    if args.command == "project":
+        try:
+            return run_project_new(
+                root,
+                args.project_name,
+                dry_run=args.dry_run,
+            )
+        except ValueError as error:
+            print(f"Error: {error}.")
+            return 1
     if args.command == "new":
         try:
             return run_new(
@@ -212,13 +256,14 @@ def main() -> int:
                 dry_run=args.dry_run,
                 complexity=args.complexity,
             )
-        except PermissionError as error:
+        except ValueError as error:
             print(f"Error: {error}.")
             return 1
     if args.command == "check":
         return run_checks(root, full=args.full)
     if args.command == "update-status":
         return run_update_status(root)
+    task_root = task_workspace_root(root)
     if args.command == "status":
         return run_status(task_root)
     if args.command == "resume":
@@ -232,16 +277,13 @@ def main() -> int:
         return run_doctor(task_root, args.task_name)
     if args.command == "verify":
         try:
-            if args.run:
-                require_task_write(root, "run task verification")
             return verify_task(load_task(task_root, args.task_name), run=args.run)
-        except (PermissionError, ValueError) as error:
+        except ValueError as error:
             print(f"Error: {error}.")
             return 1
     try:
-        require_task_write(root, "close task")
         close_task(load_task(task_root, args.task_name))
-    except (PermissionError, ValueError) as error:
+    except ValueError as error:
         print(f"Error: {error}.")
         return 1
     print(f"Task closed: {args.task_name}")

@@ -4,17 +4,15 @@
 2. Classify the task as `simple`, `standard`, or `complex`.
 3. Preview the target and scaffold with
    `python -B capabilities/tools/workspace.py new <task_name> --complexity <level> --dry-run`.
-4. Stop after the preview while the configured external tasks root remains
-   `read_only`; do not weaken the policy merely to create a task.
-5. Before a future write-enabled phase, confirm the exact external root, task
-   ownership, applicable root `AGENTS.md`, source baseline, and explicit user
-   approval.
-6. Only after that review, configure `read_write` and run
+4. Confirm the target is `projects/<task_name>/`, that no project or task
+   already uses the name, and obtain explicit approval for the scaffold write.
+5. Run
    `python -B capabilities/tools/workspace.py new <task_name> --complexity <level>`.
-7. Open `<external_tasks_root>/<task_name>/task.md` and record the goal,
+6. Open `projects/<task_name>/task.md` and record the goal,
    non-goals, constraints, inputs, acceptance criteria, and verification commands.
-8. Read the owning workspace rules and the task-local `AGENTS.md`; the stricter
+7. Read the workspace rules and the task-local `AGENTS.md`; the stricter
    safety rule applies.
+8. Use only the workspace-root Skills; do not create a task-private Skill tree.
 9. Keep task work inside that task folder. Store generated results in
    `outputs/`, reviewed artifacts in `deliverables/`, scratch files in `tmp/`,
    and logs in `logs/`.

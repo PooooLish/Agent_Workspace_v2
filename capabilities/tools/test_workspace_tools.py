@@ -18,6 +18,7 @@ import audit_git_readiness
 import check_python_syntax
 import check_workspace
 import generate_workspace_status
+import make_project
 import make_task
 import prepare_first_commit_report
 import task_lifecycle
@@ -31,7 +32,7 @@ ROOT = workspace_root()
 TMP_ROOT = ROOT / "runtime" / "tmp"
 
 
-class TaskScaffoldTests(unittest.TestCase):
+class ScaffoldTests(unittest.TestCase):
     def test_portable_task_names(self) -> None:
         for name in ("task1", "task_name", "task-name_123"):
             with self.subTest(name=name):
@@ -55,6 +56,45 @@ class TaskScaffoldTests(unittest.TestCase):
             self.assertFalse((tasks_root / "example" / "docs" / "superpowers").exists())
             self.assertIn(str(tasks_root / "example" / "summary.md"), created)
 
+    def test_task_scaffold_uses_only_workspace_root_skills(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            make_task.scaffold_task(projects_root, "example", complexity="simple")
+            task = projects_root / "example"
+
+            self.assertFalse((task / ".agents").exists())
+            self.assertFalse((task / "docs" / "skills").exists())
+            self.assertNotIn(
+                "task-specific skills",
+                (task / "AGENTS.md").read_text(encoding="utf-8"),
+            )
+            self.assertNotIn("docs/skills", (task / "README.md").read_text(encoding="utf-8"))
+
+    def test_task_scaffold_rejects_existing_project_without_changes(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            project = projects_root / "example"
+            project.mkdir(parents=True)
+            marker = project / "keep.txt"
+            marker.write_text("unchanged", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_task.scaffold_task(projects_root, "example")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "unchanged")
+
+    def test_task_scaffold_rejects_a_file_name_collision(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            projects_root.mkdir()
+            marker = projects_root / "example"
+            marker.write_text("unchanged", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_task.scaffold_task(projects_root, "example")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "unchanged")
+
     def test_complex_scaffold_has_explicit_coordination_files(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
             tasks_root = Path(directory) / "custom-projects"
@@ -63,6 +103,240 @@ class TaskScaffoldTests(unittest.TestCase):
             task = tasks_root / "example"
             self.assertTrue((task / "docs" / "superpowers" / "README.md").is_file())
             self.assertTrue((task / "coordination" / "contract.md").is_file())
+
+
+    def test_scaffold_creates_project_without_initializing_git(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            created, skipped = make_project.scaffold_project(
+                projects_root,
+                "example-project",
+            )
+
+            project = projects_root / "example-project"
+            self.assertFalse(skipped)
+            self.assertTrue((project / "project.md").is_file())
+            self.assertTrue((project / "AGENTS.md").is_file())
+            self.assertFalse((project / ".git").exists())
+            self.assertIn(str(project / "README.md"), created)
+
+    def test_project_scaffold_includes_open_source_assessment(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            make_project.scaffold_project(projects_root, "example-project")
+
+            assessment = (
+                projects_root
+                / "example-project"
+                / "docs"
+                / "open-source-assessment.md"
+            )
+            text = assessment.read_text(encoding="utf-8")
+
+        for heading in (
+            "## Search Scope",
+            "## Candidates",
+            "## License and Obligations",
+            "## Security and Maintenance",
+            "## Decision",
+            "## Reuse Boundary",
+        ):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, text)
+
+    def test_generated_project_rules_require_open_source_intake(self) -> None:
+        rules = make_project.build_agents("example-project")
+        self.assertIn("open-source-assessment.md", rules)
+        self.assertIn("before implementation", rules)
+
+    def test_open_source_research_skill_and_sop_exist(self) -> None:
+        self.assertTrue(
+            (
+                ROOT
+                / ".agents"
+                / "skills"
+                / "open-source-project-research"
+                / "SKILL.md"
+            ).is_file()
+        )
+        self.assertTrue(
+            (
+                ROOT
+                / "capabilities"
+                / "sops"
+                / "open_source_project_intake.md"
+            ).is_file()
+        )
+
+    def test_scaffold_rejects_exact_existing_project_without_changes(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            project = projects_root / "example-project"
+            project.mkdir(parents=True)
+            marker = project / "keep.txt"
+            marker.write_text("unchanged", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_project.scaffold_project(projects_root, "example-project")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "unchanged")
+            self.assertEqual(
+                [path.name for path in project.iterdir()],
+                ["keep.txt"],
+            )
+
+    def test_scaffold_rejects_case_insensitive_project_collision(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            (projects_root / "Example-Project").mkdir(parents=True)
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_project.scaffold_project(projects_root, "example-project")
+
+    def test_project_dry_run_rejects_existing_project(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            projects_root = root / "projects"
+            (projects_root / "example-project").mkdir(parents=True)
+            config = {"paths": {"projects": "projects"}}
+
+            with patch.object(workspace, "load_workspace_config", return_value=config):
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    workspace.run_project_new(
+                        root,
+                        "example-project",
+                        dry_run=True,
+                    )
+
+    def test_project_new_reports_created_project(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
+
+            with patch.object(workspace, "load_workspace_config", return_value=config):
+                with redirect_stdout(io.StringIO()) as output:
+                    result = workspace.run_project_new(
+                        root,
+                        "example-project",
+                        dry_run=False,
+                    )
+
+            self.assertEqual(result, 0)
+            self.assertIn(
+                str(root / "projects" / "example-project"),
+                output.getvalue(),
+            )
+
+    def test_make_project_main_reports_created_project(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
+
+            with (
+                patch.object(make_project, "workspace_root", return_value=root),
+                patch.object(
+                    make_project,
+                    "load_workspace_config",
+                    return_value=config,
+                ),
+                patch.object(sys, "argv", ["make_project.py", "example-project"]),
+                redirect_stdout(io.StringIO()) as output,
+            ):
+                result = make_project.main()
+
+            self.assertEqual(result, 0)
+            self.assertIn(
+                str(root / "projects" / "example-project"),
+                output.getvalue(),
+            )
+
+    def test_project_path_is_configured_and_root_exists(self) -> None:
+        config = load_workspace_config(ROOT)
+        self.assertEqual(config["paths"]["projects"], "projects")
+        self.assertTrue((ROOT / "projects" / "README.md").is_file())
+
+    def test_workspace_parser_has_explicit_project_new_command(self) -> None:
+        args = workspace.build_parser().parse_args(
+            ["project", "new", "example-project"]
+        )
+        self.assertEqual(args.command, "project")
+        self.assertEqual(args.project_command, "new")
+        self.assertEqual(args.project_name, "example-project")
+
+    def test_workspace_check_rejects_tracked_project_content(self) -> None:
+        with patch.object(
+            check_workspace,
+            "git_tracked_files",
+            return_value=["projects/README.md", "projects/example/src/app.py"],
+        ):
+            issues = check_workspace.check_workspace(ROOT)
+
+        self.assertIn(
+            "project content must not be tracked by the workspace repository: "
+            "projects/example/src/app.py",
+            issues,
+        )
+
+    def test_workspace_check_rejects_tracked_artifact_content(self) -> None:
+        with patch.object(
+            check_workspace,
+            "git_tracked_files",
+            return_value=[
+                "storage/artifacts/README.md",
+                "storage/artifacts/report.json",
+            ],
+        ):
+            issues = check_workspace.check_workspace(ROOT)
+
+        self.assertIn(
+            "local storage content must not be tracked by the workspace "
+            "repository: storage/artifacts/report.json",
+            issues,
+        )
+
+    def test_workspace_check_rejects_tracked_archive_content(self) -> None:
+        with patch.object(
+            check_workspace,
+            "git_tracked_files",
+            return_value=[
+                "storage/archives/README.md",
+                "storage/archives/projects/example/src/app.py",
+            ],
+        ):
+            issues = check_workspace.check_workspace(ROOT)
+
+        self.assertIn(
+            "local storage content must not be tracked by the workspace "
+            "repository: storage/archives/projects/example/src/app.py",
+            issues,
+        )
+
+    def test_runtime_gitignore_is_default_deny_with_contract_allowlist(self) -> None:
+        ignored = subprocess.run(
+            [
+                "git",
+                "check-ignore",
+                "--no-index",
+                "--quiet",
+                "runtime/installers/future-installer.bin",
+            ],
+            cwd=ROOT,
+            check=False,
+        )
+        contract = subprocess.run(
+            [
+                "git",
+                "check-ignore",
+                "--no-index",
+                "--quiet",
+                "runtime/tmp/README.md",
+            ],
+            cwd=ROOT,
+            check=False,
+        )
+
+        self.assertEqual(ignored.returncode, 0)
+        self.assertEqual(contract.returncode, 1)
 
     def test_verification_stops_after_the_first_failed_command(self) -> None:
         task = task_lifecycle.TaskRecord(
@@ -327,6 +601,14 @@ class V2IntegrationTests(unittest.TestCase):
         self.assertIn("ubuntu-latest", text)
         self.assertIn("capabilities/tools/workspace.py check --full", text)
 
+    def test_ci_checks_every_supported_python_version(self) -> None:
+        workflow = ROOT / ".github" / "workflows" / "workspace-check.yml"
+        text = workflow.read_text(encoding="utf-8")
+        for version in ('"3.10"', '"3.11"', '"3.12"'):
+            with self.subTest(version=version):
+                self.assertIn(version, text)
+        self.assertIn("python-version: ${{ matrix.python-version }}", text)
+
     def test_link_scan_excludes_private_and_runtime_roots(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
             root = Path(directory)
@@ -380,49 +662,45 @@ class V2IntegrationTests(unittest.TestCase):
         self.assertIn("capabilities/tools/verify_workspace_status.py", commands)
         self.assertNotIn("capabilities/tools/generate_workspace_status.py", commands)
 
-    def test_task_cli_rejects_mutation_before_access(self) -> None:
-        for arguments in (
-            ("new", "must_not_exist"),
-            ("verify", "must_not_exist", "--run"),
-            ("close", "must_not_exist"),
-        ):
-            with self.subTest(arguments=arguments):
-                result = subprocess.run(
-                    [sys.executable, "-B", "capabilities/tools/workspace.py", *arguments],
-                    cwd=ROOT,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                )
-                self.assertEqual(result.returncode, 1)
-                self.assertIn("read-only", result.stdout)
+    def test_task_new_uses_configured_projects_root(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
 
-    def test_new_dry_run_is_allowed_for_a_read_only_external_root(self) -> None:
-        tasks_root = TMP_ROOT / "dry-run-external-root"
-        task_root = tasks_root / "dry-run-preview"
-        self.assertFalse(task_root.exists())
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-B",
-                "capabilities/tools/workspace.py",
-                "new",
-                "dry-run-preview",
-                "--dry-run",
-            ],
-            cwd=ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            env={**os.environ, "AGENT_TASKS_ROOT": str(tasks_root)},
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("Dry run:", result.stdout)
-        self.assertFalse(task_root.exists())
+            with patch.object(workspace, "load_workspace_config", return_value=config):
+                with redirect_stdout(io.StringIO()) as output:
+                    result = workspace.run_new(
+                        root,
+                        "example-task",
+                        dry_run=False,
+                        complexity="simple",
+                    )
+
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "projects" / "example-task" / "task.md").is_file())
+            self.assertIn(str(root / "projects" / "example-task"), output.getvalue())
+
+    def test_task_dry_run_ignores_external_tasks_override(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
+            external_root = root / "external-tasks"
+
+            with (
+                patch.object(workspace, "load_workspace_config", return_value=config),
+                patch.dict(os.environ, {"AGENT_TASKS_ROOT": str(external_root)}),
+                redirect_stdout(io.StringIO()) as output,
+            ):
+                result = workspace.run_new(
+                    root,
+                    "dry-run-preview",
+                    dry_run=True,
+                    complexity="simple",
+                )
+
+            self.assertEqual(result, 0)
+            self.assertIn(str(root / "projects" / "dry-run-preview"), output.getvalue())
+            self.assertFalse(external_root.exists())
 
     def test_external_tasks_override_does_not_change_access(self) -> None:
         config = load_workspace_config(ROOT)
@@ -437,11 +715,11 @@ class V2IntegrationTests(unittest.TestCase):
             warnings = check_workspace.workspace_warnings(ROOT)
 
         self.assertFalse(
-            any("external tasks root is unavailable" in issue for issue in issues),
+            any("legacy external tasks root is unavailable" in issue for issue in issues),
             issues,
         )
         self.assertTrue(
-            any("external tasks root is unavailable" in warning for warning in warnings),
+            any("legacy external tasks root is unavailable" in warning for warning in warnings),
             warnings,
         )
 
@@ -451,12 +729,30 @@ class V2IntegrationTests(unittest.TestCase):
         with patch.dict("os.environ", {"AGENT_TASKS_ROOT": str(ROOT.parent / "two")}):
             second = generate_workspace_status.build_status(ROOT)
         self.assertEqual(first, second)
-        self.assertIn("External tasks access: `read_only`", first)
+        self.assertIn("Legacy external tasks access: `read_only`", first)
         self.assertIn("## Reserved Control Plane", first)
         self.assertIn("## Current Framework Docs", first)
+        self.assertIn("## Local Task And Project Policy", first)
+        self.assertIn("workspace repository tracks only `projects/README.md`", first)
         self.assertIn("docs/framework/task-lifecycle.md", first)
-        self.assertNotIn("External tasks available:", first)
-        self.assertNotIn("External tasks source:", first)
+        self.assertNotIn("Legacy external tasks available:", first)
+        self.assertNotIn("Legacy external tasks source:", first)
+
+    def test_markdown_inventory_uses_portable_casefolded_order(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            docs = Path(directory)
+            (docs / "aider.md").write_text("# Aider\n", encoding="utf-8")
+            (docs / "README.md").write_text("# Readme\n", encoding="utf-8")
+
+            items = generate_workspace_status.markdown_items(ROOT, docs)
+
+        self.assertEqual(
+            items,
+            [
+                f"- `{(docs / 'aider.md').relative_to(ROOT).as_posix()}`",
+                f"- `{(docs / 'README.md').relative_to(ROOT).as_posix()}`",
+            ],
+        )
 
     def test_workspace_parser_has_explicit_status_update_command(self) -> None:
         args = workspace.build_parser().parse_args(["update-status"])

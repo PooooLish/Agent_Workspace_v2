@@ -46,17 +46,31 @@ REQUIRED_ITEMS = (
     ".local/README.md",
     "docs/framework",
     "docs/environments",
+    "projects/README.md",
 )
 
 REQUIRED_IGNORE_PATTERNS = (
     ".local/envs/**",
     ".local/secrets/**",
-    "runtime/task-state/**",
-    "runtime/runs/**",
-    "runtime/outputs/**",
-    "runtime/logs/**",
-    "runtime/tmp/**",
-    "runtime/sandboxes/**",
+    "runtime/**",
+    "!runtime/task-state/",
+    "!runtime/task-state/README.md",
+    "!runtime/runs/",
+    "!runtime/runs/README.md",
+    "!runtime/outputs/",
+    "!runtime/outputs/README.md",
+    "!runtime/logs/",
+    "!runtime/logs/README.md",
+    "!runtime/tmp/",
+    "!runtime/tmp/README.md",
+    "!runtime/sandboxes/",
+    "!runtime/sandboxes/README.md",
+    "projects/**",
+    "!projects/README.md",
+    "storage/artifacts/**",
+    "storage/archives/**",
+    "!storage/artifacts/README.md",
+    "!storage/archives/README.md",
     "**/__pycache__/",
     ".env",
     ".env.*",
@@ -196,9 +210,9 @@ def check_workspace(root: Path) -> list[str]:
 
     tasks = resolve_external_root(root, config, "tasks")
     if tasks.access != "read_only":
-        issues.append("external tasks root must be read_only")
+        issues.append("legacy external tasks root must be read_only")
     if tasks.path.is_relative_to(root):
-        issues.append("external tasks root unexpectedly resolves inside V2")
+        issues.append("legacy external tasks root unexpectedly resolves inside V2")
     gitignore_path = root / ".gitignore"
     if gitignore_path.is_file():
         lines = {
@@ -218,11 +232,36 @@ def check_workspace(root: Path) -> list[str]:
     issues.extend(skill_issues(skills_root))
 
     tracked = set(git_tracked_files(root))
+    runtime_contracts = {
+        "runtime/task-state/README.md",
+        "runtime/runs/README.md",
+        "runtime/outputs/README.md",
+        "runtime/logs/README.md",
+        "runtime/tmp/README.md",
+        "runtime/sandboxes/README.md",
+    }
+    storage_contracts = {
+        "storage/artifacts/README.md",
+        "storage/archives/README.md",
+    }
     for relative in tracked:
         normalized = relative.replace("\\", "/")
-        if normalized.startswith((".local/envs/", ".local/secrets/", "runtime/")):
-            if not normalized.endswith("/README.md"):
-                issues.append(f"private/runtime file is tracked: {normalized}")
+        if normalized.startswith((".local/envs/", ".local/secrets/")):
+            issues.append(f"private/runtime file is tracked: {normalized}")
+        if normalized.startswith("runtime/") and normalized not in runtime_contracts:
+            issues.append(f"private/runtime file is tracked: {normalized}")
+        if normalized.startswith("projects/") and normalized != "projects/README.md":
+            issues.append(
+                "project content must not be tracked by the workspace repository: "
+                f"{normalized}"
+            )
+        if normalized.startswith(
+            ("storage/artifacts/", "storage/archives/")
+        ) and normalized not in storage_contracts:
+            issues.append(
+                "local storage content must not be tracked by the workspace "
+                f"repository: {normalized}"
+            )
 
     tools_root = configured_path(root, config, "tools")
     actual_tools = {
@@ -244,7 +283,8 @@ def workspace_warnings(root: Path) -> list[str]:
     warnings: list[str] = []
     if not tasks.path.is_dir():
         warnings.append(
-            f"external tasks root is unavailable; task commands are disabled: {tasks.path}"
+            "legacy external tasks root is unavailable; historical task views "
+            f"are unavailable: {tasks.path}"
         )
     return warnings
 

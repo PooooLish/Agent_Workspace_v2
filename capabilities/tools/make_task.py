@@ -5,16 +5,14 @@ import argparse
 from pathlib import Path
 
 from workspace_paths import (
+    configured_path,
     load_workspace_config,
-    require_writable_external_root,
-    resolve_external_root,
     workspace_root as resolve_workspace_root,
 )
 
 from task_names import TASK_NAME_RE, validate_task_name
 
 TASK_DIRS = [
-    ".agents/skills",
     "src",
     "scripts",
     "data",
@@ -24,7 +22,6 @@ TASK_DIRS = [
     "tmp",
     "logs",
     "docs",
-    "docs/skills",
 ]
 
 COMPLEXITIES = ("simple", "standard", "complex")
@@ -60,8 +57,7 @@ def build_task_agents(task_name: str) -> str:
 - Do not delete files without approval.
 - Do not store or print real secrets.
 - Keep outputs in `outputs/`, scratch files in `tmp/`, and logs in `logs/`.
-- Keep executable task-specific skills under `.agents/skills/`.
-- Keep task-specific notes, lessons, and checklists under `docs/skills/`.
+- Use only the shared workspace skills discovered from `../../.agents/skills/`.
 
 ## Workflow
 
@@ -167,8 +163,6 @@ This task folder was created by `capabilities/tools/make_task.py`.
 6. Put tests in `tests/`.
 7. Put generated or reproducible results in `outputs/`.
 8. Put reviewed, publishable final artifacts in `deliverables/`.
-9. Put executable task-specific skills in `.agents/skills/`.
-10. Put task-specific notes, lessons, and checklists in `docs/skills/`.
 """
 
 
@@ -212,36 +206,17 @@ def scaffold_task(
     *,
     complexity: str = "standard",
 ) -> tuple[list[str], list[str]]:
-    validate_task_name(task_name)
+    task_root = validate_task_target(tasks_root, task_name)
     if complexity not in COMPLEXITIES:
         raise ValueError(f"complexity must be one of: {', '.join(COMPLEXITIES)}")
 
-    if tasks_root.exists():
-        collisions = [
-            path.name
-            for path in tasks_root.iterdir()
-            if path.is_dir()
-            and path.name.casefold() == task_name.casefold()
-            and path.name != task_name
-        ]
-        if collisions:
-            raise ValueError(
-                f"task_name conflicts case-insensitively with existing task: {collisions[0]}"
-            )
-    task_root = tasks_root / task_name
-    resolved_task_root = task_root.resolve()
-    resolved_tasks_root = tasks_root.resolve()
-    if resolved_tasks_root not in resolved_task_root.parents:
-        raise ValueError("resolved task path must stay inside the tasks directory")
-
     created: list[str] = []
     skipped: list[str] = []
-    task_root.mkdir(parents=True, exist_ok=True)
+    task_root.mkdir(parents=True)
     for dirname in TASK_DIRS:
         dir_path = task_root / dirname
-        if not dir_path.exists():
-            dir_path.mkdir(parents=True, exist_ok=True)
-            created.append(str(dir_path))
+        dir_path.mkdir(parents=True)
+        created.append(str(dir_path))
 
     write_if_missing(task_root / "AGENTS.md", build_task_agents(task_name), created, skipped)
     write_if_missing(task_root / "task.md", build_task_md(task_name, complexity), created, skipped)
@@ -264,8 +239,31 @@ def scaffold_task(
     return created, skipped
 
 
+def validate_task_target(tasks_root: Path, task_name: str) -> Path:
+    validate_task_name(task_name)
+    resolved_tasks_root = tasks_root.resolve()
+    task_root = tasks_root / task_name
+    resolved_task_root = task_root.resolve()
+    if resolved_tasks_root not in resolved_task_root.parents:
+        raise ValueError("resolved task path must stay inside the projects directory")
+
+    if tasks_root.is_dir():
+        collisions = [
+            path.name
+            for path in tasks_root.iterdir()
+            if path.name.casefold() == task_name.casefold()
+        ]
+        if collisions:
+            raise ValueError(
+                f"project or task already exists: {collisions[0]}"
+            )
+    elif tasks_root.exists():
+        raise ValueError(f"projects path is not a directory: {tasks_root}")
+    return task_root
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Create a private task scaffold.")
+    parser = argparse.ArgumentParser(description="Create a task scaffold under projects.")
     parser.add_argument("task_name")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--complexity", choices=COMPLEXITIES, default="standard")
@@ -284,9 +282,12 @@ def main() -> int:
 
     workspace_root = resolve_workspace_root()
     config = load_workspace_config(workspace_root)
-    tasks = resolve_external_root(workspace_root, config, "tasks")
-    tasks_root = tasks.path
-    task_root = tasks_root / task_name
+    tasks_root = configured_path(workspace_root, config, "projects")
+    try:
+        task_root = validate_task_target(tasks_root, task_name)
+    except ValueError as error:
+        print(f"Error: {error}.")
+        return 1
     if dry_run:
         print(f"Dry run: task directory would be created at {task_root}")
         print("Planned directories:")
@@ -299,12 +300,6 @@ def main() -> int:
             print(f"  + {task_root / 'docs' / 'superpowers' / 'README.md'}")
             print(f"  + {task_root / 'coordination' / 'contract.md'}")
         return 0
-
-    try:
-        require_writable_external_root(tasks, "create task")
-    except PermissionError as error:
-        print(f"Error: {error}.")
-        return 1
 
     try:
         created, skipped = scaffold_task(

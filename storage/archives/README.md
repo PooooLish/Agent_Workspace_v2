@@ -1,6 +1,7 @@
 # Archives
 
-This directory holds durable framework records or approved historical material.
-It is not a mirror of source tasks and does not contain task snapshots in phase
-one. Generated reports and run logs stay under `runtime/`.
+This directory holds durable local historical material. Archived or abandoned
+concrete projects live under `projects/<project-name>/` inside this directory.
 
+Archive contents remain local. The workspace repository tracks this directory
+contract only. Generated reports and run logs stay under `runtime/`.

@@ -11,9 +11,9 @@
 ## Source Workspace Isolation
 
 - Treat `../agent_workspace/` as a read-only external source.
-- Resolve the external tasks root through `.workspace/config.json` or
+- Resolve the legacy external tasks root through `.workspace/config.json` or
   `AGENT_TASKS_ROOT`; do not scatter the relative path through code.
-- Read-only task views are allowed. Creating tasks, running task commands,
+- Read-only legacy task views are allowed. Creating tasks, running commands,
   closing tasks, formatting, fixing, or writing state in the external root is
   forbidden while its configured access is `read_only`.
 - Never modify nested repositories, Git metadata, worktrees, caches, logs, or
@@ -51,18 +51,61 @@
 
 - `simple`: implement after a short conversational plan; do not create spec or
   plan files.
+- Simple work needs focused verification, one self-review, and a concise
+  report. Do not add repeated human approval gates unless a safety rule, a
+  destructive action, or a material product choice requires one.
+- These simple-work rules take priority over reusable workflows that would
+  otherwise require formal design documents, implementation plans, or repeated
+  review checkpoints.
 - `standard`: use durable task state only when it adds operational value.
 - `complex`: use a written plan for high-risk, cross-module, long-running, or
   multi-agent work.
 - Framework decisions belong in `docs/framework/`. Task-specific planning stays
   with its owning task when task writes are explicitly enabled.
 
+## Open Source Intake
+
+- Before implementing a new software project, research current open-source
+  repositories and authoritative documentation that could satisfy or inform it.
+- Record the comparison and decision in the project's
+  `docs/open-source-assessment.md`. Simple projects may use a concise table;
+  standard and complex projects need evidence proportional to their risk.
+- Evaluate source and version, license obligations, maintenance, security,
+  technical fit, integration cost, and the intended reuse boundary.
+- Choose and justify one approach: `greenfield`, `reference`, `integrate`, or
+  `fork`.
+- Research is read-only. Cloning, downloading, installing dependencies, copying
+  code, or forking requires explicit approval.
+- Missing, ambiguous, or incompatible licensing prohibits copying, integrating,
+  adapting, or forking code.
+
 ## Placement
 
 - `.workspace/`: control-plane configuration and minimal policy metadata.
 - `.agents/skills/`: the only Codex skill body location.
 - `capabilities/`: reusable SOPs, prompts, and tools.
+- `projects/`: local concrete task and project area; the workspace repository
+  tracks only its `README.md`.
 - `runtime/`: regenerable state, logs, temporary files, and experiments.
-- `storage/`: durable artifacts and archives.
+- `storage/`: durable local artifacts and archives; the workspace repository
+  tracks only its directory contracts.
 - `.local/`: ignored machine-local environments and secrets.
 - `WORKSPACE_STATUS.md`: generated current state, never permanent policy.
+
+## Project Repository Isolation
+
+- Current concrete tasks and projects live under `projects/<name>/` and are
+  ignored by the workspace repository.
+- Archived or abandoned projects live under
+  `storage/archives/projects/<project-name>/` and remain ignored.
+- The workspace remote maintains architecture only. Concrete project, runtime,
+  artifact, and archive contents must not be tracked by the root repository.
+- Workspace-wide checks must not recursively traverse concrete project
+  contents.
+- A draft task or project may remain local without Git.
+- Before committing or publishing long-lived concrete work, initialize and
+  verify an independent Git repository inside its directory only after explicit
+  approval.
+- Task and project scaffolding must not initialize Git, install dependencies,
+  or publish files automatically.
+- A nested `AGENTS.md` may tighten these rules but cannot weaken them.

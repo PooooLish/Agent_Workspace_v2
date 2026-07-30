@@ -1,7 +1,7 @@
 # Task Lifecycle
 
-This document defines the task lifecycle contract shared with the source
-workspace and the V2-specific external-root boundary.
+This document defines the lifecycle contract for current tasks under
+`projects/` and the separate read-only boundary around legacy tasks.
 
 ## Design Goals
 
@@ -9,7 +9,7 @@ workspace and the V2-specific external-root boundary.
   chat history.
 - Keep simple work lightweight and free of standalone specification files.
 - Require explicit intent before executing task-defined commands.
-- Keep framework state in V2 and project state in the owning external task.
+- Keep framework state in V2 and task state in its owning `projects/<name>/`.
 - Never infer write permission from tool availability.
 
 ## Complexity Levels
@@ -32,18 +32,21 @@ Task-local specifications may live under `docs/superpowers/`. Multi-agent work
 uses `coordination/contract.md` for dependencies, owners, worktrees, allowed
 paths, verification, and status.
 
-## Phase-One Commands
+## Commands
 
 ```powershell
 python -B capabilities/tools/workspace.py new my_task --complexity standard --dry-run
+python -B capabilities/tools/workspace.py new my_task --complexity standard
 python -B capabilities/tools/workspace.py status
 python -B capabilities/tools/workspace.py resume my_task
 python -B capabilities/tools/workspace.py doctor my_task
 python -B capabilities/tools/workspace.py verify my_task
 ```
 
-The external root is `read_only`. Dry-run and read-only views are available;
-actual `new`, `verify --run`, and `close` operations are blocked.
+These commands operate only on lifecycle-managed directories under `projects/`.
+The legacy external root remains `read_only` and is not a fallback target.
+Scaffolding, `verify --run`, and `close` are writes or command execution and
+therefore require explicit approval.
 
 ## State Ownership
 
@@ -72,8 +75,8 @@ sandbox, a container, or another restricted executor.
 status fields. It does not execute verification, archive, publish, delete, or
 commit a task. Those remain separate, explicitly approved actions.
 
-## Future Write Gate
+## Legacy Boundary
 
-Before changing the external root to `read_write`, review the source-protection
-baseline, task ownership model, applicable root rules, and rollback path.
-Mutating commands must continue to use the centralized permission guard.
+Do not change the legacy external task root to `read_write` for normal V2
+operation. Historical inspection must use the centralized external-root
+resolver, remain read-only, and never be mixed into current lifecycle commands.

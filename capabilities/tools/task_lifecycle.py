@@ -141,7 +141,7 @@ def load_task(tasks_root: Path, name: str) -> TaskRecord:
     task_root = task_root_for(tasks_root, name)
     task_path = task_root / "task.md"
     if not task_path.is_file():
-        raise ValueError(f"tasks/{name}/task.md does not exist")
+        raise ValueError(f"projects/{name}/task.md does not exist")
     return TaskRecord(task_root, name, parse_sections(task_path.read_text(encoding="utf-8")))
 
 
@@ -151,7 +151,9 @@ def discover_task_names(tasks_root: Path) -> list[str]:
     return sorted(
         path.name
         for path in tasks_root.iterdir()
-        if path.is_dir() and TASK_NAME_RE.fullmatch(path.name)
+        if path.is_dir()
+        and TASK_NAME_RE.fullmatch(path.name)
+        and (path / "task.md").is_file()
     )
 
 
