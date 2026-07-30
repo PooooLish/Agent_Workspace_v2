@@ -10,7 +10,7 @@ AGENT_WORKSPACE_V2/
 |-- .workspace/          control configuration
 |-- .agents/skills/      Codex skill discovery
 |-- capabilities/        SOPs, prompts, and tools
-|-- projects/            ignored local projects with independent ownership
+|-- projects/            ignored current tasks and projects
 |-- runtime/             local regenerable state
 |-- storage/             durable artifacts and archives
 |-- .local/              ignored environments and secrets
@@ -35,9 +35,10 @@ under `capabilities/`.
 contains prompt templates without authority to weaken policy.
 `capabilities/tools/` contains executable helpers and focused tests.
 
-`runtime/` contains generated task state, run records, intermediate outputs,
-logs, temporary data, and disposable sandboxes. Only its README contracts are
-intended for Git.
+`runtime/` contains derived task indexes, framework run records, intermediate
+outputs, logs, temporary data, and disposable sandboxes. Canonical task state
+remains in `projects/<name>/task.md`. Only runtime README contracts are intended
+for Git.
 
 `storage/artifacts/` is for reviewed local deliverables. `storage/archives/` is
 for durable local historical or normative material, not caches. Only their
@@ -47,8 +48,9 @@ README contracts are intended for the workspace repository.
 read scope. Reproducible environment definitions should live in a future
 tracked infrastructure area, not under `.local/`.
 
-`projects/` is the local project area. The V2 workspace repository tracks only
-`projects/README.md`; concrete project directories are ignored and excluded
+`projects/` is the local concrete work area for both lifecycle-managed tasks
+and standalone projects. The V2 workspace repository tracks only
+`projects/README.md`; concrete directories are ignored and excluded
 from workspace-wide recursive scans. Drafts may remain local without Git.
 Archived or abandoned projects move to
 `storage/archives/projects/<project-name>/`. Concrete project contents remain
@@ -75,7 +77,7 @@ different directory layout:
 - Publishing, archiving, deleting, executing task commands, and changing access
   policy are separate actions requiring explicit scope and approval.
 
-## External Tasks
+## Legacy External Tasks
 
 The authoritative configuration is `.workspace/config.json`:
 
@@ -95,15 +97,25 @@ The file uses JSON so the standard-library resolver can parse it without an
 additional dependency. The optional environment variable changes only the path.
 Permission remains controlled by the configuration.
 
-Tools must use `workspace_paths.resolve_external_root()`. Phase-one scanners may
-check availability and read task metadata only when explicitly invoked; they
-must not recursively scan the external root during normal workspace checks.
+Tools that inspect legacy tasks must use
+`workspace_paths.resolve_external_root()`. Normal task lifecycle commands do
+not use this root. Workspace checks may check its availability but must not
+recursively scan it or write to it.
 
-`new --dry-run` may preview a task target without changing access. Actual task
-creation, command execution, and closeout remain disabled until the ownership
-model, applicable root rules, source baseline, and rollback path are reviewed.
+## Current Tasks And Projects
 
-## Local Projects
+Preview or create a lifecycle-managed task under `projects/`:
+
+```powershell
+python -B capabilities/tools/workspace.py new my-task --complexity standard --dry-run
+python -B capabilities/tools/workspace.py new my-task --complexity standard
+```
+
+The task scaffold provides `task.md`, `summary.md`, task-local rules, source,
+tests, outputs, deliverables, temporary files, and logs. It uses only the
+workspace-root Skills and does not create a task-private Skill tree. Status,
+resume, doctor, verification, and closeout commands discover only directories
+containing `task.md`.
 
 Preview or create a minimal project scaffold:
 
@@ -130,7 +142,8 @@ dependency, copying code, or creating a fork requires explicit approval.
 Missing, ambiguous, or incompatible licensing rules out code reuse; preserve
 required notices and attribution for approved reuse.
 
-The workspace repository owns the project-area contract, not project contents.
+The workspace repository owns the `projects/` area contract, not concrete task
+or project contents.
 When a project becomes durable or publishable, review its local files and then
 explicitly initialize an independent repository from inside that project.
 When a project is archived or abandoned, move it to

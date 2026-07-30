@@ -210,9 +210,9 @@ def check_workspace(root: Path) -> list[str]:
 
     tasks = resolve_external_root(root, config, "tasks")
     if tasks.access != "read_only":
-        issues.append("external tasks root must be read_only")
+        issues.append("legacy external tasks root must be read_only")
     if tasks.path.is_relative_to(root):
-        issues.append("external tasks root unexpectedly resolves inside V2")
+        issues.append("legacy external tasks root unexpectedly resolves inside V2")
     gitignore_path = root / ".gitignore"
     if gitignore_path.is_file():
         lines = {
@@ -283,7 +283,8 @@ def workspace_warnings(root: Path) -> list[str]:
     warnings: list[str] = []
     if not tasks.path.is_dir():
         warnings.append(
-            f"external tasks root is unavailable; task commands are disabled: {tasks.path}"
+            "legacy external tasks root is unavailable; historical task views "
+            f"are unavailable: {tasks.path}"
         )
     return warnings
 

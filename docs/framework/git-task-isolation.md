@@ -10,9 +10,12 @@ repositories remain separate ownership domains.
 
 - V2 Git owns `.workspace/`, reusable capabilities, adapters, framework docs,
   runtime README contracts, and durable V2 storage.
-- The external task root is resolved through `.workspace/config.json` and is
-  `read_only` in phase one.
-- V2 checks must not stage, recursively scan, format, or modify external tasks.
+- Current concrete tasks and projects live under ignored `projects/<name>/`
+  directories and are never owned by V2 Git.
+- The legacy external task root is resolved through `.workspace/config.json`
+  and remains `read_only`.
+- V2 checks must not stage or recursively scan concrete projects, nor format or
+  modify legacy tasks.
 - Nested repositories under the external root are not V2 submodules and remain
   outside V2 maintenance.
 - Generated runtime data and machine-local credentials remain ignored.
@@ -39,7 +42,7 @@ Before committing or pushing the V2 framework:
 
 ## Independent Task Publication
 
-If an external task is deliberately published later, treat its repository as an
-independent project. Review its complete candidate list, secret scan, local
-ignore rules, large files, and destination repository. Publishing a task never
-requires adding its contents to the V2 repository.
+If a current task is deliberately published later, initialize an independent
+repository inside its `projects/<name>/` directory only after approval. Review
+its complete candidate list, secret scan, local ignore rules, large files, and
+destination. Publishing never adds task contents to the V2 repository.

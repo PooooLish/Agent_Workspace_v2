@@ -11,9 +11,9 @@
 ## Source Workspace Isolation
 
 - Treat `../agent_workspace/` as a read-only external source.
-- Resolve the external tasks root through `.workspace/config.json` or
+- Resolve the legacy external tasks root through `.workspace/config.json` or
   `AGENT_TASKS_ROOT`; do not scatter the relative path through code.
-- Read-only task views are allowed. Creating tasks, running task commands,
+- Read-only legacy task views are allowed. Creating tasks, running commands,
   closing tasks, formatting, fixing, or writing state in the external root is
   forbidden while its configured access is `read_only`.
 - Never modify nested repositories, Git metadata, worktrees, caches, logs, or
@@ -84,8 +84,8 @@
 - `.workspace/`: control-plane configuration and minimal policy metadata.
 - `.agents/skills/`: the only Codex skill body location.
 - `capabilities/`: reusable SOPs, prompts, and tools.
-- `projects/`: local project area; the workspace repository tracks only its
-  `README.md`.
+- `projects/`: local concrete task and project area; the workspace repository
+  tracks only its `README.md`.
 - `runtime/`: regenerable state, logs, temporary files, and experiments.
 - `storage/`: durable local artifacts and archives; the workspace repository
   tracks only its directory contracts.
@@ -94,18 +94,18 @@
 
 ## Project Repository Isolation
 
-- Concrete projects live under `projects/<project-name>/` and are ignored by
-  the workspace repository.
+- Current concrete tasks and projects live under `projects/<name>/` and are
+  ignored by the workspace repository.
 - Archived or abandoned projects live under
   `storage/archives/projects/<project-name>/` and remain ignored.
 - The workspace remote maintains architecture only. Concrete project, runtime,
   artifact, and archive contents must not be tracked by the root repository.
 - Workspace-wide checks must not recursively traverse concrete project
   contents.
-- A draft project may remain local without Git.
-- Before committing or publishing a long-lived project, initialize and verify
-  an independent Git repository inside that project only after explicit
+- A draft task or project may remain local without Git.
+- Before committing or publishing long-lived concrete work, initialize and
+  verify an independent Git repository inside its directory only after explicit
   approval.
-- Project scaffolding must not initialize Git, install dependencies, or publish
-  files automatically.
-- A project's nested `AGENTS.md` may tighten these rules but cannot weaken them.
+- Task and project scaffolding must not initialize Git, install dependencies,
+  or publish files automatically.
+- A nested `AGENTS.md` may tighten these rules but cannot weaken them.

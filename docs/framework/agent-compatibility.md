@@ -14,6 +14,6 @@ Skill bodies into tool-specific directories because duplicated instructions
 drift. For tools without native discovery, select a relevant Skill explicitly
 and provide its path as context.
 
-Tasks are external and read-only in phase one. Agents start in V2, resolve the
-task root through `.workspace/config.json`, and must not infer write permission
-from another framework's capabilities.
+Current tasks live under `projects/` and inherit root rules through their nested
+`AGENTS.md`. Legacy tasks remain external and read-only. Agents must not infer
+permission to mutate either area from another framework's capabilities.

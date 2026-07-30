@@ -56,6 +56,45 @@ class ScaffoldTests(unittest.TestCase):
             self.assertFalse((tasks_root / "example" / "docs" / "superpowers").exists())
             self.assertIn(str(tasks_root / "example" / "summary.md"), created)
 
+    def test_task_scaffold_uses_only_workspace_root_skills(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            make_task.scaffold_task(projects_root, "example", complexity="simple")
+            task = projects_root / "example"
+
+            self.assertFalse((task / ".agents").exists())
+            self.assertFalse((task / "docs" / "skills").exists())
+            self.assertNotIn(
+                "task-specific skills",
+                (task / "AGENTS.md").read_text(encoding="utf-8"),
+            )
+            self.assertNotIn("docs/skills", (task / "README.md").read_text(encoding="utf-8"))
+
+    def test_task_scaffold_rejects_existing_project_without_changes(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            project = projects_root / "example"
+            project.mkdir(parents=True)
+            marker = project / "keep.txt"
+            marker.write_text("unchanged", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_task.scaffold_task(projects_root, "example")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "unchanged")
+
+    def test_task_scaffold_rejects_a_file_name_collision(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            projects_root.mkdir()
+            marker = projects_root / "example"
+            marker.write_text("unchanged", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_task.scaffold_task(projects_root, "example")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "unchanged")
+
     def test_complex_scaffold_has_explicit_coordination_files(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
             tasks_root = Path(directory) / "custom-projects"
@@ -623,49 +662,45 @@ class V2IntegrationTests(unittest.TestCase):
         self.assertIn("capabilities/tools/verify_workspace_status.py", commands)
         self.assertNotIn("capabilities/tools/generate_workspace_status.py", commands)
 
-    def test_task_cli_rejects_mutation_before_access(self) -> None:
-        for arguments in (
-            ("new", "must_not_exist"),
-            ("verify", "must_not_exist", "--run"),
-            ("close", "must_not_exist"),
-        ):
-            with self.subTest(arguments=arguments):
-                result = subprocess.run(
-                    [sys.executable, "-B", "capabilities/tools/workspace.py", *arguments],
-                    cwd=ROOT,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                )
-                self.assertEqual(result.returncode, 1)
-                self.assertIn("read-only", result.stdout)
+    def test_task_new_uses_configured_projects_root(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
 
-    def test_new_dry_run_is_allowed_for_a_read_only_external_root(self) -> None:
-        tasks_root = TMP_ROOT / "dry-run-external-root"
-        task_root = tasks_root / "dry-run-preview"
-        self.assertFalse(task_root.exists())
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-B",
-                "capabilities/tools/workspace.py",
-                "new",
-                "dry-run-preview",
-                "--dry-run",
-            ],
-            cwd=ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            env={**os.environ, "AGENT_TASKS_ROOT": str(tasks_root)},
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("Dry run:", result.stdout)
-        self.assertFalse(task_root.exists())
+            with patch.object(workspace, "load_workspace_config", return_value=config):
+                with redirect_stdout(io.StringIO()) as output:
+                    result = workspace.run_new(
+                        root,
+                        "example-task",
+                        dry_run=False,
+                        complexity="simple",
+                    )
+
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "projects" / "example-task" / "task.md").is_file())
+            self.assertIn(str(root / "projects" / "example-task"), output.getvalue())
+
+    def test_task_dry_run_ignores_external_tasks_override(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
+            external_root = root / "external-tasks"
+
+            with (
+                patch.object(workspace, "load_workspace_config", return_value=config),
+                patch.dict(os.environ, {"AGENT_TASKS_ROOT": str(external_root)}),
+                redirect_stdout(io.StringIO()) as output,
+            ):
+                result = workspace.run_new(
+                    root,
+                    "dry-run-preview",
+                    dry_run=True,
+                    complexity="simple",
+                )
+
+            self.assertEqual(result, 0)
+            self.assertIn(str(root / "projects" / "dry-run-preview"), output.getvalue())
+            self.assertFalse(external_root.exists())
 
     def test_external_tasks_override_does_not_change_access(self) -> None:
         config = load_workspace_config(ROOT)
@@ -680,11 +715,11 @@ class V2IntegrationTests(unittest.TestCase):
             warnings = check_workspace.workspace_warnings(ROOT)
 
         self.assertFalse(
-            any("external tasks root is unavailable" in issue for issue in issues),
+            any("legacy external tasks root is unavailable" in issue for issue in issues),
             issues,
         )
         self.assertTrue(
-            any("external tasks root is unavailable" in warning for warning in warnings),
+            any("legacy external tasks root is unavailable" in warning for warning in warnings),
             warnings,
         )
 
@@ -694,14 +729,14 @@ class V2IntegrationTests(unittest.TestCase):
         with patch.dict("os.environ", {"AGENT_TASKS_ROOT": str(ROOT.parent / "two")}):
             second = generate_workspace_status.build_status(ROOT)
         self.assertEqual(first, second)
-        self.assertIn("External tasks access: `read_only`", first)
+        self.assertIn("Legacy external tasks access: `read_only`", first)
         self.assertIn("## Reserved Control Plane", first)
         self.assertIn("## Current Framework Docs", first)
-        self.assertIn("## Local Project Policy", first)
+        self.assertIn("## Local Task And Project Policy", first)
         self.assertIn("workspace repository tracks only `projects/README.md`", first)
         self.assertIn("docs/framework/task-lifecycle.md", first)
-        self.assertNotIn("External tasks available:", first)
-        self.assertNotIn("External tasks source:", first)
+        self.assertNotIn("Legacy external tasks available:", first)
+        self.assertNotIn("Legacy external tasks source:", first)
 
     def test_markdown_inventory_uses_portable_casefolded_order(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:

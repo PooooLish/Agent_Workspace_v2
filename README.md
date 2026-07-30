@@ -1,7 +1,8 @@
 # Agent Workspace V2
 
 一个隔离构建的 Codex 工作空间骨架。它将控制规则、可复用能力、运行状态、
-长期产物和本机私有数据分层，并以只读外部根引用旧工作空间中的任务。
+长期产物和本机私有数据分层。当前任务和项目位于 `projects/`，旧工作空间任务
+仅作为只读历史来源。
 
 ## 快速开始
 
@@ -9,20 +10,20 @@
 python -B capabilities/tools/workspace.py check
 python -B capabilities/tools/workspace.py status
 python -B capabilities/tools/workspace.py doctor
+python -B capabilities/tools/workspace.py new my-task --dry-run
 python -B capabilities/tools/workspace.py project new my-project --dry-run
 ```
 
-任务目录由 `.workspace/config.json` 统一解析。第一阶段配置为
-`../agent_workspace/tasks`、`read_only`；因此状态查看可用，而新建任务、
-执行任务验证和关闭任务会被拒绝。`AGENT_TASKS_ROOT` 可覆盖路径，但不能覆盖
-访问级别。
+当前任务目录由 `.workspace/config.json` 的 `paths.projects` 统一解析到
+`projects/`。旧目录 `../agent_workspace/tasks` 保留为 `read_only` 历史来源；
+`AGENT_TASKS_ROOT` 只能覆盖该旧目录的位置，不能赋予写权限。
 
 目录入口：
 
 - `.workspace/`：工作空间控制配置
 - `.agents/skills/`：Codex Skill 发现入口
 - `capabilities/`：SOP、Prompt 和工具
-- `projects/`：本地项目区；V2 根仓库只跟踪入口说明
+- `projects/`：当前具体任务和项目区；V2 根仓库只跟踪入口说明
 - `runtime/`：本地运行状态与临时数据
 - `storage/`：仅本地保存的长期产物与归档
 - `.local/`：本机环境和凭据，默认禁止读取并由 Git 忽略
@@ -38,7 +39,8 @@ python -B capabilities/tools/workspace.py project new my-project --dry-run
   复用边界。简单项目使用简表即可；克隆、下载、安装依赖、复制代码或 fork 仍需明确授权。
 - `workspace.py check --full` 只验证状态，不自动重写文档；需要更新清单时显式运行
   `workspace.py update-status`。
-- 外部任务默认只读。`new --dry-run` 可以预览，新建、执行命令和关闭任务仍被阻止。
+- `new`、`status`、`verify` 和 `close` 操作 `projects/` 中的当前任务；运行写操作前
+  仍须获得明确授权。旧工作区任务始终只读。
 - 发布 V2 或独立任务前，分别检查候选文件、密钥、私有数据、大文件和目标仓库。
 - V2 远端仓库只维护 workspace 架构。具体项目、运行状态、产物和归档均保持本地；
   根仓库只跟踪这些目录的规则说明。
@@ -53,8 +55,8 @@ python -B capabilities/tools/workspace.py project new my-project --dry-run
 
 Agent Workspace V2 is an isolated Codex workspace scaffold. It separates control
 configuration, reusable capabilities, runtime state, durable storage, and
-machine-local private data. Existing tasks are referenced as an external
-read-only root rather than copied.
+machine-local private data. Current tasks and projects live under `projects/`;
+legacy tasks remain available only as an external read-only source.
 
 ## Quick Start
 
@@ -62,13 +64,13 @@ read-only root rather than copied.
 python -B capabilities/tools/workspace.py check
 python -B capabilities/tools/workspace.py status
 python -B capabilities/tools/workspace.py doctor
+python -B capabilities/tools/workspace.py new my-task --dry-run
 python -B capabilities/tools/workspace.py project new my-project --dry-run
 ```
 
-`.workspace/config.json` resolves the tasks root. Phase one points to
-`../agent_workspace/tasks` with `read_only` access. Read-only views work, while
-task creation, verification execution, and task closeout are blocked.
-`AGENT_TASKS_ROOT` may override the location but not its access policy.
+`.workspace/config.json` resolves current tasks through `paths.projects`.
+`../agent_workspace/tasks` remains a legacy `read_only` source.
+`AGENT_TASKS_ROOT` may override that legacy location but not its access policy.
 
 ## Operating Model
 
@@ -85,8 +87,9 @@ task creation, verification execution, and task closeout are blocked.
   installing, copying code, or forking still requires explicit approval.
 - `workspace.py check --full` verifies tracked status without rewriting it. Run
   `workspace.py update-status` explicitly when the inventory changes.
-- External tasks are read-only by default. `new --dry-run` previews a target;
-  creation, command execution, and closeout remain blocked.
+- `new`, `status`, `verify`, and `close` operate on current tasks under
+  `projects/`; write operations still require explicit approval. Legacy tasks
+  remain read-only.
 - The V2 remote maintains workspace architecture only. Concrete projects,
   runtime state, artifacts, and archives remain local; only their directory
   contracts are tracked.
