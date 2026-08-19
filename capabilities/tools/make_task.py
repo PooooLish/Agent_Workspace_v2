@@ -59,6 +59,16 @@ def build_task_agents(task_name: str) -> str:
 - Keep outputs in `outputs/`, scratch files in `tmp/`, and logs in `logs/`.
 - Use only the shared workspace skills discovered from `../../.agents/skills/`.
 
+## State and handoff
+
+- Stable task rules belong in this file. Current execution state belongs in
+  `task.md`; completed outcomes belong in `summary.md`.
+- Do not rely on chat history or Agent-specific memory for durable decisions.
+- Before handing work to another Agent, update `Decisions`, `Progress`,
+  `Next action`, `Blockers`, and `Verification commands` in `task.md`.
+- Record only verification that actually ran, including its result and any
+  remaining limitation.
+
 ## Workflow
 
 1. Read the workspace root `../../AGENTS.md`.
@@ -67,7 +77,8 @@ def build_task_agents(task_name: str) -> str:
 4. Propose a short plan.
 5. Make the minimum useful change.
 6. Run the minimum verification command.
-7. Report changed files, commands run, and verification result.
+7. Update the handoff state before stopping or changing Agents.
+8. Report changed files, commands run, and verification result.
 
 ## Task name
 

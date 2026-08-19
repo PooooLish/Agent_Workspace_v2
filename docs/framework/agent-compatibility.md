@@ -15,5 +15,5 @@ drift. For tools without native discovery, select a relevant Skill explicitly
 and provide its path as context.
 
 Current tasks live under `projects/` and inherit root rules through their nested
-`AGENTS.md`. Legacy tasks remain external and read-only. Agents must not infer
-permission to mutate either area from another framework's capabilities.
+`AGENTS.md`. Agents must not infer permission to mutate them from another
+framework's capabilities.

@@ -75,7 +75,11 @@ def build_agents(project_name: str) -> str:
 3. State a short plan appropriate to the change.
 4. Make small, reviewable edits.
 5. Run focused verification.
-6. Review the diff and report remaining risks.
+6. Before changing Agents, update `Status`, `Decisions`, `Progress`,
+   `Next Action`, `Blockers`, and `Verification` in `project.md`.
+7. Run `python -B capabilities/tools/workspace.py handoff {project_name}`
+   from the workspace root and review the packet against Git state.
+8. Review the diff and report remaining risks.
 
 ## Project
 
@@ -135,6 +139,10 @@ downloading, installing, copying code, or forking.
 def build_project_md(project_name: str) -> str:
     return f"""# Project: {project_name}
 
+## Status
+
+planning
+
 ## Goal
 
 Describe the product or outcome.
@@ -155,6 +163,22 @@ List intentionally excluded work.
 ## Acceptance Criteria
 
 List observable conditions for a usable first version.
+
+## Decisions
+
+Record durable implementation decisions and their reasons.
+
+## Progress
+
+Record completed milestones that matter for handoff.
+
+## Next Action
+
+Complete this state file and the open-source assessment before implementation.
+
+## Blockers
+
+None.
 
 ## Verification
 

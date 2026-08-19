@@ -12,7 +12,6 @@ from workspace_paths import (
     CONFIG_PATH,
     configured_path,
     load_workspace_config,
-    resolve_external_root,
     workspace_root,
 )
 
@@ -88,6 +87,16 @@ LINK_SCAN_ROOTS = (
 )
 WINDOWS_REPARSE_POINT = 0x400
 SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+PROJECT_HANDOFF_SECTIONS = (
+    "Status",
+    "Goal",
+    "Acceptance Criteria",
+    "Decisions",
+    "Progress",
+    "Next Action",
+    "Blockers",
+    "Verification",
+)
 
 
 def skill_frontmatter(path: Path) -> dict[str, str]:
@@ -135,6 +144,48 @@ def skill_issues(skills_root: Path) -> list[str]:
                 )
             else:
                 names[name] = skill.name
+    return issues
+
+
+def project_rule_issues(projects_root: Path) -> list[str]:
+    if not projects_root.is_dir():
+        return []
+    issues: list[str] = []
+    projects = sorted(
+        (path for path in projects_root.iterdir() if path.is_dir()),
+        key=lambda path: path.name.casefold(),
+    )
+    for project in projects:
+        relative = f"projects/{project.name}"
+        if not (project / "AGENTS.md").is_file():
+            issues.append(
+                "concrete task or project is missing top-level AGENTS.md: "
+                + relative
+            )
+        task_state = project / "task.md"
+        project_state = project / "project.md"
+        if task_state.is_file():
+            continue
+        if not project_state.is_file():
+            issues.append(
+                "concrete task or project is missing task.md or project.md: "
+                + relative
+            )
+            continue
+        headings = {
+            match.group(1).strip()
+            for match in re.finditer(
+                r"^##[ \t]+(.+?)[ \t]*$",
+                project_state.read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+        }
+        missing = [heading for heading in PROJECT_HANDOFF_SECTIONS if heading not in headings]
+        if missing:
+            issues.append(
+                f"project.md is missing handoff sections in {relative}: "
+                + ", ".join(missing)
+            )
     return issues
 
 
@@ -208,11 +259,6 @@ def check_workspace(root: Path) -> list[str]:
             except (KeyError, TypeError, ValueError) as error:
                 issues.append(str(error))
 
-    tasks = resolve_external_root(root, config, "tasks")
-    if tasks.access != "read_only":
-        issues.append("legacy external tasks root must be read_only")
-    if tasks.path.is_relative_to(root):
-        issues.append("legacy external tasks root unexpectedly resolves inside V2")
     gitignore_path = root / ".gitignore"
     if gitignore_path.is_file():
         lines = {
@@ -230,6 +276,8 @@ def check_workspace(root: Path) -> list[str]:
 
     skills_root = configured_path(root, config, "skills")
     issues.extend(skill_issues(skills_root))
+    projects_root = configured_path(root, config, "projects")
+    issues.extend(project_rule_issues(projects_root))
 
     tracked = set(git_tracked_files(root))
     runtime_contracts = {
@@ -277,23 +325,9 @@ def check_workspace(root: Path) -> list[str]:
     return sorted(set(issues))
 
 
-def workspace_warnings(root: Path) -> list[str]:
-    config = load_workspace_config(root)
-    tasks = resolve_external_root(root, config, "tasks")
-    warnings: list[str] = []
-    if not tasks.path.is_dir():
-        warnings.append(
-            "legacy external tasks root is unavailable; historical task views "
-            f"are unavailable: {tasks.path}"
-        )
-    return warnings
-
-
 def main() -> int:
     root = workspace_root()
     issues = check_workspace(root)
-    for warning in workspace_warnings(root):
-        print(f"Warning: {warning}")
     if issues:
         print("Workspace check failed:")
         for issue in issues:

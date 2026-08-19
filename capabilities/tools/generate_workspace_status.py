@@ -12,7 +12,6 @@ from workspace_manifest import (
 from workspace_paths import (
     configured_path,
     load_workspace_config,
-    resolve_external_root,
     workspace_root,
 )
 
@@ -47,7 +46,6 @@ def tool_items(root: Path) -> list[str]:
 
 def build_status(root: Path) -> str:
     config = load_workspace_config(root)
-    tasks = resolve_external_root(root, config, "tasks")
     skills = configured_path(root, config, "skills")
     sops = configured_path(root, config, "sops")
     prompts = configured_path(root, config, "prompts")
@@ -67,7 +65,6 @@ def build_status(root: Path) -> str:
         "## Current Health",
         "",
         "- Layout: isolated V2 control plane and capability directories.",
-        f"- Legacy external tasks access: `{tasks.access}`.",
         "- OS-level write isolation: not enforced by this configuration.",
         "",
         "## Reserved Control Plane",
@@ -83,7 +80,7 @@ def build_status(root: Path) -> str:
         *CORE_MAINTENANCE_COMMANDS,
         "```",
         "",
-        "Current task lifecycle commands operate under `projects/`; the legacy external task root remains read-only.",
+        "Current task lifecycle commands operate only under `projects/`.",
         "",
         "## Local Task And Project Policy",
         "",
@@ -142,7 +139,7 @@ def build_status(root: Path) -> str:
         "- `runtime/` contains generated and locally disposable state; only directory README files are trackable.",
         "- `storage/` contains durable local data; only directory README contracts are trackable.",
         "- `.local/envs/` and `.local/secrets/` are local-only and ignored.",
-        "- No task, Superpowers snapshot, worktree, secret, output, log, or cache was copied from the source workspace.",
+        "- No concrete task, worktree, secret, output, log, or cache belongs in the workspace repository.",
         "",
     ]
     return "\n".join(lines)

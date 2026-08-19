@@ -1,6 +1,7 @@
 # Machine-local environments and credentials
 .local/envs/**
 .local/secrets/**
+.local/opencode/**
 
 # Runtime state; keep only directory contracts
 runtime/**

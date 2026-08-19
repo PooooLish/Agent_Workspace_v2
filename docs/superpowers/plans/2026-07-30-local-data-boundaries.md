@@ -12,7 +12,7 @@
 
 - The root remote repository contains workspace architecture and contract README files only.
 - Concrete content below `projects/`, `runtime/`, and `storage/` remains local.
-- The external source workspace remains read-only.
+- The V2 framework does not depend on paths outside its workspace root.
 - No dependency installation is required.
 - Tests that create temporary files must write only below `runtime/tmp/`.
 - The archived `expense-insight-cli` project must never become a Git candidate.

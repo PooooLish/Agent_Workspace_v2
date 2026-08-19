@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import io
-import os
 import re
 import subprocess
 import sys
@@ -25,7 +24,7 @@ import task_lifecycle
 import workspace
 from task_names import validate_task_name
 from workspace_manifest import FULL_ONLY_STEPS, QUICK_CHECK_STEPS, TOOL_DESCRIPTIONS
-from workspace_paths import load_workspace_config, resolve_external_root, workspace_root
+from workspace_paths import load_workspace_config, workspace_root
 
 
 ROOT = workspace_root()
@@ -148,6 +147,241 @@ class ScaffoldTests(unittest.TestCase):
         rules = make_project.build_agents("example-project")
         self.assertIn("open-source-assessment.md", rules)
         self.assertIn("before implementation", rules)
+
+    def test_generated_project_rules_require_handoff_update(self) -> None:
+        rules = make_project.build_agents("example-project")
+        self.assertIn("Before changing Agents", rules)
+        self.assertIn("Progress", rules)
+        self.assertIn("Next Action", rules)
+        self.assertIn(
+            "python -B capabilities/tools/workspace.py handoff example-project",
+            rules,
+        )
+
+    def test_generated_project_state_contains_handoff_fields(self) -> None:
+        state = make_project.build_project_md("example-project")
+        for heading in (
+            "## Status",
+            "## Goal",
+            "## Acceptance Criteria",
+            "## Decisions",
+            "## Progress",
+            "## Next Action",
+            "## Blockers",
+            "## Verification",
+        ):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, state)
+
+    def test_every_concrete_project_requires_top_level_agents(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            complete = projects_root / "complete"
+            missing = projects_root / "missing"
+            complete.mkdir(parents=True)
+            missing.mkdir()
+            (complete / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (complete / "project.md").write_text(
+                make_project.build_project_md("complete"),
+                encoding="utf-8",
+            )
+            (missing / "task.md").write_text(
+                make_task.build_task_md("missing"),
+                encoding="utf-8",
+            )
+
+            issues = check_workspace.project_rule_issues(projects_root)
+
+        self.assertEqual(
+            issues,
+            [
+                "concrete task or project is missing top-level AGENTS.md: "
+                "projects/missing"
+            ],
+        )
+
+    def test_concrete_project_requires_task_or_project_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            project = projects_root / "missing-state"
+            project.mkdir(parents=True)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+
+            issues = check_workspace.project_rule_issues(projects_root)
+
+        self.assertIn(
+            "concrete task or project is missing task.md or project.md: "
+            "projects/missing-state",
+            issues,
+        )
+
+    def test_project_state_requires_handoff_sections(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            project = projects_root / "incomplete"
+            project.mkdir(parents=True)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (project / "project.md").write_text(
+                "# Project: incomplete\n\n## Goal\n\nKeep it working.\n",
+                encoding="utf-8",
+            )
+
+            issues = check_workspace.project_rule_issues(projects_root)
+
+        self.assertTrue(
+            any("project.md is missing handoff sections" in issue for issue in issues),
+            issues,
+        )
+
+    def test_handoff_packet_supports_project_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory)
+            project = projects_root / "example"
+            project.mkdir()
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (project / "project.md").write_text(
+                """# Project: example
+
+## Status
+
+active
+
+## Goal
+
+Ship the project.
+
+## Constraints
+
+Keep changes local.
+
+## Decisions
+
+Use the current architecture.
+
+## Progress
+
+Core behavior is implemented.
+
+## Next Action
+
+Run the focused checks.
+
+## Blockers
+
+None.
+
+## Verification
+
+python -B test.py
+""",
+                encoding="utf-8",
+            )
+
+            packet = task_lifecycle.build_handoff_packet(projects_root, "example")
+
+        self.assertIn("State source: project.md", packet)
+        self.assertIn("Status: active", packet)
+        self.assertIn("## Progress\n\nCore behavior is implemented.", packet)
+        self.assertIn("## Next action\n\nRun the focused checks.", packet)
+
+    def test_workspace_parser_has_handoff_command(self) -> None:
+        args = workspace.build_parser().parse_args(["handoff", "example"])
+        self.assertEqual(args.command, "handoff")
+        self.assertEqual(args.work_name, "example")
+
+    def test_work_discovery_includes_tasks_and_projects(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory)
+            task = projects_root / "task-one"
+            project = projects_root / "project-one"
+            ignored = projects_root / "empty"
+            task.mkdir()
+            project.mkdir()
+            ignored.mkdir()
+            (task / "task.md").write_text("# Task\n", encoding="utf-8")
+            (project / "project.md").write_text("# Project\n", encoding="utf-8")
+
+            names = task_lifecycle.discover_work_names(projects_root)
+
+        self.assertEqual(names, ["project-one", "task-one"])
+
+    def test_project_doctor_flags_unfinished_handoff_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            project = Path(directory)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (project / "project.md").write_text(
+                make_project.build_project_md("example"),
+                encoding="utf-8",
+            )
+
+            findings = task_lifecycle.diagnose_project(project)
+
+        self.assertTrue(any("Goal" in finding for finding in findings), findings)
+        self.assertTrue(any("Verification" in finding for finding in findings), findings)
+
+    def test_project_doctor_flags_needs_review_status(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            project = Path(directory)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            state = make_project.build_project_md("example").replace(
+                "## Status\n\nplanning",
+                "## Status\n\nneeds-review",
+            )
+            state = state.replace(
+                "Describe the product or outcome.",
+                "Deliver a verified example project.",
+            ).replace(
+                "List observable conditions for a usable first version.",
+                "Focused checks pass and the handoff state is current.",
+            ).replace(
+                "Record durable implementation decisions and their reasons.",
+                "Keep the current architecture.",
+            ).replace(
+                "Record completed milestones that matter for handoff.",
+                "The workspace contract is present.",
+            ).replace(
+                "Complete this state file and the open-source assessment before implementation.",
+                "Review the implementation and replace this bootstrap state.",
+            ).replace(
+                "List commands that verify the project.",
+                "python -B test.py",
+            )
+            (project / "project.md").write_text(state, encoding="utf-8")
+
+            findings = task_lifecycle.diagnose_project(project)
+
+        self.assertIn("Status needs review before handoff", findings)
+
+    def test_task_doctor_reports_missing_agents_file(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            task_root = Path(directory)
+            task = task_lifecycle.TaskRecord(
+                task_root,
+                "example",
+                {
+                    "Status": "active",
+                    "Complexity": "standard",
+                    "Phase": "implementation",
+                    "Goal": "Deliver the requested behavior.",
+                    "Acceptance criteria": "The behavior is verified.",
+                    "Verification commands": "python -B test.py",
+                    "Next action": "Run the focused test.",
+                    "Blockers": "None",
+                },
+            )
+            (task_root / "summary.md").write_text("# Summary\n", encoding="utf-8")
+
+            findings = task_lifecycle.diagnose_task(task)
+
+        self.assertIn("AGENTS.md is missing", findings)
+
+    def test_generated_task_rules_define_handoff_state(self) -> None:
+        rules = make_task.build_task_agents("example")
+        self.assertIn("Stable task rules belong in this file", rules)
+        self.assertIn("Progress", rules)
+        self.assertIn("Next action", rules)
+        self.assertIn("Blockers", rules)
+        self.assertIn("Verification", rules)
 
     def test_open_source_research_skill_and_sop_exist(self) -> None:
         self.assertTrue(
@@ -441,6 +675,10 @@ None.
 """,
                 encoding="utf-8",
             )
+            (task_root / "AGENTS.md").write_text(
+                "# Task Rules\n",
+                encoding="utf-8",
+            )
             task_lifecycle.close_task(task_lifecycle.load_task(tasks_root, "example"))
             sections = task_lifecycle.parse_sections(
                 (task_root / "task.md").read_text(encoding="utf-8")
@@ -680,15 +918,13 @@ class V2IntegrationTests(unittest.TestCase):
             self.assertTrue((root / "projects" / "example-task" / "task.md").is_file())
             self.assertIn(str(root / "projects" / "example-task"), output.getvalue())
 
-    def test_task_dry_run_ignores_external_tasks_override(self) -> None:
+    def test_task_dry_run_uses_configured_projects_root(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
             root = Path(directory)
             config = {"paths": {"projects": "projects"}}
-            external_root = root / "external-tasks"
 
             with (
                 patch.object(workspace, "load_workspace_config", return_value=config),
-                patch.dict(os.environ, {"AGENT_TASKS_ROOT": str(external_root)}),
                 redirect_stdout(io.StringIO()) as output,
             ):
                 result = workspace.run_new(
@@ -700,43 +936,17 @@ class V2IntegrationTests(unittest.TestCase):
 
             self.assertEqual(result, 0)
             self.assertIn(str(root / "projects" / "dry-run-preview"), output.getvalue())
-            self.assertFalse(external_root.exists())
-
-    def test_external_tasks_override_does_not_change_access(self) -> None:
-        config = load_workspace_config(ROOT)
-        tasks = resolve_external_root(ROOT, config, "tasks")
-        self.assertEqual(tasks.access, "read_only")
-        self.assertFalse(tasks.path.is_relative_to(ROOT))
-
-    def test_missing_external_tasks_root_is_not_a_structure_failure(self) -> None:
-        missing = ROOT.parent / "missing-external-tasks-review"
-        with patch.dict("os.environ", {"AGENT_TASKS_ROOT": str(missing)}):
-            issues = check_workspace.check_workspace(ROOT)
-            warnings = check_workspace.workspace_warnings(ROOT)
-
-        self.assertFalse(
-            any("legacy external tasks root is unavailable" in issue for issue in issues),
-            issues,
-        )
-        self.assertTrue(
-            any("legacy external tasks root is unavailable" in warning for warning in warnings),
-            warnings,
-        )
 
     def test_status_generator_is_deterministic(self) -> None:
-        with patch.dict("os.environ", {"AGENT_TASKS_ROOT": str(ROOT.parent / "one")}):
-            first = generate_workspace_status.build_status(ROOT)
-        with patch.dict("os.environ", {"AGENT_TASKS_ROOT": str(ROOT.parent / "two")}):
-            second = generate_workspace_status.build_status(ROOT)
+        first = generate_workspace_status.build_status(ROOT)
+        second = generate_workspace_status.build_status(ROOT)
         self.assertEqual(first, second)
-        self.assertIn("Legacy external tasks access: `read_only`", first)
+        self.assertNotIn("external_roots", first)
         self.assertIn("## Reserved Control Plane", first)
         self.assertIn("## Current Framework Docs", first)
         self.assertIn("## Local Task And Project Policy", first)
         self.assertIn("workspace repository tracks only `projects/README.md`", first)
         self.assertIn("docs/framework/task-lifecycle.md", first)
-        self.assertNotIn("Legacy external tasks available:", first)
-        self.assertNotIn("Legacy external tasks source:", first)
 
     def test_markdown_inventory_uses_portable_casefolded_order(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:

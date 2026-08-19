@@ -1,7 +1,7 @@
 # Task Lifecycle
 
 This document defines the lifecycle contract for current tasks under
-`projects/` and the separate read-only boundary around legacy tasks.
+`projects/`.
 
 ## Design Goals
 
@@ -11,6 +11,8 @@ This document defines the lifecycle contract for current tasks under
 - Require explicit intent before executing task-defined commands.
 - Keep framework state in V2 and task state in its owning `projects/<name>/`.
 - Never infer write permission from tool availability.
+- Require every concrete project or task directory to provide a top-level
+  `AGENTS.md` for stable local rules.
 
 ## Complexity Levels
 
@@ -39,21 +41,30 @@ python -B capabilities/tools/workspace.py new my_task --complexity standard --dr
 python -B capabilities/tools/workspace.py new my_task --complexity standard
 python -B capabilities/tools/workspace.py status
 python -B capabilities/tools/workspace.py resume my_task
+python -B capabilities/tools/workspace.py handoff my_task
 python -B capabilities/tools/workspace.py doctor my_task
 python -B capabilities/tools/workspace.py verify my_task
 ```
 
 These commands operate only on lifecycle-managed directories under `projects/`.
-The legacy external root remains `read_only` and is not a fallback target.
 Scaffolding, `verify --run`, and `close` are writes or command execution and
 therefore require explicit approval.
 
 ## State Ownership
 
 `task.md` owns current execution state. `summary.md` owns the final outcome.
+Task `AGENTS.md` owns stable scope, safety, workflow, and verification rules.
 Task-local outputs, logs, and temporary files stay inside the task repository.
 V2 framework runs and generated state stay under `runtime/`. V2 does not keep a
 second registry containing private task details.
+
+Before changing Agents, update decisions, progress, next action, blockers, and
+verification evidence in `task.md`. The receiving Agent reads root rules,
+task-level rules, task state, and the task README before continuing.
+
+Standalone projects use `project.md` with the same dynamic handoff fields.
+`handoff` supports both state-file types and adds Git branch and commit context;
+it does not create or update a second handoff document.
 
 ## Recovery
 

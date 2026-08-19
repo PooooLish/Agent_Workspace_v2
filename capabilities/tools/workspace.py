@@ -12,11 +12,15 @@ from make_project import scaffold_project, validate_project_target
 from make_task import scaffold_task, validate_task_target
 from task_lifecycle import (
     COMPLEXITIES,
+    build_handoff_packet,
     build_resume_packet,
     close_task,
+    diagnose_project,
     diagnose_task,
     discover_task_names,
+    discover_work_names,
     load_task,
+    task_root_for,
     verify_task,
 )
 from workspace_manifest import FULL_ONLY_STEPS, QUICK_CHECK_STEPS, StepSpec
@@ -170,15 +174,20 @@ def run_status(root: Path) -> int:
 
 
 def run_doctor(root: Path, task_name: str | None) -> int:
-    names = [task_name] if task_name else discover_task_names(root)
+    names = [task_name] if task_name else discover_work_names(root)
     if not names:
-        print("No lifecycle-managed task directories found under projects.")
+        print("No lifecycle-managed task or project directories found under projects.")
         return 0
     finding_count = 0
     for name in names:
         try:
-            task = load_task(root, name)
-            findings = diagnose_task(task)
+            work_root = task_root_for(root, name)
+            if (work_root / "task.md").is_file():
+                findings = diagnose_task(load_task(root, name))
+            elif (work_root / "project.md").is_file():
+                findings = diagnose_project(work_root)
+            else:
+                raise ValueError(f"projects/{name}/task.md or project.md does not exist")
         except ValueError as error:
             findings = [str(error)]
         if not findings:
@@ -223,7 +232,16 @@ def build_parser() -> argparse.ArgumentParser:
     resume_parser = subparsers.add_parser("resume", help="print a compact task recovery packet")
     resume_parser.add_argument("task_name")
 
-    doctor_parser = subparsers.add_parser("doctor", help="report incomplete task lifecycle state")
+    handoff_parser = subparsers.add_parser(
+        "handoff",
+        help="print a current task or project handoff packet",
+    )
+    handoff_parser.add_argument("work_name")
+
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="report incomplete task or project handoff state",
+    )
     doctor_parser.add_argument("task_name", nargs="?")
 
     verify_parser = subparsers.add_parser("verify", help="preview or run task verification commands")
@@ -269,6 +287,13 @@ def main() -> int:
     if args.command == "resume":
         try:
             print(build_resume_packet(load_task(task_root, args.task_name)))
+            return 0
+        except ValueError as error:
+            print(f"Error: {error}.")
+            return 1
+    if args.command == "handoff":
+        try:
+            print(build_handoff_packet(task_root, args.work_name))
             return 0
         except ValueError as error:
             print(f"Error: {error}.")

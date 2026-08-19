@@ -20,13 +20,6 @@
     "local_envs": ".local/envs",
     "local_secrets": ".local/secrets"
   },
-  "external_roots": {
-    "tasks": {
-      "path": "../agent_workspace/tasks",
-      "access": "read_only",
-      "env": "AGENT_TASKS_ROOT"
-    }
-  },
   "adapters": {
     "codex": ".codex",
     "skills": ".agents/skills"

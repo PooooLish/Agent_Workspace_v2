@@ -29,7 +29,7 @@ python -B capabilities/tools/workspace.py new my_task --dry-run
 
 Path resolution is centralized in `workspace_paths.py`. New tools consume
 configured names instead of hard-coding root directories. Tests use
-`runtime/tmp/` and must not recursively discover the external source workspace.
+`runtime/tmp/` and must not recursively traverse concrete project contents.
 
 Use `.agents/skills/` for intent-matched reusable Skills,
 `capabilities/sops/` for directly followed procedures,

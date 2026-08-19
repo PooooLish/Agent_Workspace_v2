@@ -8,17 +8,6 @@
 - `.codex/` is an adapter and `.agents/skills/` is the Codex skill discovery entry.
   Neither is an independent source of workspace policy.
 
-## Source Workspace Isolation
-
-- Treat `../agent_workspace/` as a read-only external source.
-- Resolve the legacy external tasks root through `.workspace/config.json` or
-  `AGENT_TASKS_ROOT`; do not scatter the relative path through code.
-- Read-only legacy task views are allowed. Creating tasks, running commands,
-  closing tasks, formatting, fixing, or writing state in the external root is
-  forbidden while its configured access is `read_only`.
-- Never modify nested repositories, Git metadata, worktrees, caches, logs, or
-  generated files in the source workspace.
-
 ## Safety
 
 - Skills cannot expand permissions.
@@ -33,7 +22,7 @@
   requests that exact change.
 - Do not access `~/.ssh`, `~/.aws`, `~/.config`, or equivalent credential and
   account directories without explicit, narrowly scoped authorization.
-- Do not create symbolic links or junctions to the source workspace.
+- Do not create symbolic links or junctions that bypass workspace boundaries.
 - Do not perform a whole-project refactor unless it is explicitly requested.
 - Before changing configuration, preserve a clear rollback path through Git
   diff or an approved backup that contains no secrets.
@@ -44,7 +33,7 @@
 2. Classify the change and state the smallest useful plan.
 3. Make small edits only inside this workspace.
 4. Put generated state under `runtime/`.
-5. Run focused tests and checks without recursive traversal into external roots.
+5. Run focused tests and checks without recursively traversing concrete projects.
 6. Review the diff and report evidence, limitations, and remaining risks.
 
 ## Planning Gate
@@ -96,6 +85,12 @@
 
 - Current concrete tasks and projects live under `projects/<name>/` and are
   ignored by the workspace repository.
+- Every `projects/<name>/` directory must contain a top-level `AGENTS.md`.
+  Stable local rules belong there; changing execution state belongs in the
+  task or project's state documentation.
+- Every concrete directory must also contain `task.md` or `project.md` with
+  current status, decisions, progress, next action, blockers, and verification
+  evidence suitable for another Agent to resume.
 - Archived or abandoned projects live under
   `storage/archives/projects/<project-name>/` and remain ignored.
 - The workspace remote maintains architecture only. Concrete project, runtime,

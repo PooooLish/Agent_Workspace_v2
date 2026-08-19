@@ -19,6 +19,8 @@
 10. Run `python -B capabilities/tools/workspace.py doctor <task_name>` after
     filling the task state.
 11. Update the task `README.md` when its workflow changes.
+12. Before changing Agents, update the task state and review
+    `python -B capabilities/tools/workspace.py handoff <task_name>`.
 
 Keep `Status`, `Progress`, `Next action`, and `Blockers` current after meaningful work so another agent can resume without reconstructing the task history. Use the generated `summary.md` for the final outcome, changes, verification, and open issues.
 

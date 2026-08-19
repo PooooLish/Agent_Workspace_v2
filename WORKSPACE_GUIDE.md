@@ -2,8 +2,8 @@
 
 ## Design
 
-V2 is built beside the source workspace, not migrated in place. The source
-workspace remains an external asset and is not a fallback write location.
+V2 is a self-contained workspace architecture. It does not depend on or resolve
+paths into a separate historical workspace.
 
 ```text
 AGENT_WORKSPACE_V2/
@@ -20,8 +20,8 @@ AGENT_WORKSPACE_V2/
 
 ## Directory Contracts
 
-`.workspace/` contains the path map, external-root access policy, and minimal
-future extension points. It is not a framework competing with Codex.
+`.workspace/` contains the internal path map and minimal future extension
+points. It is not a framework competing with Codex.
 The `policies/`, `profiles/`, `registry/`, and `schemas/` subdirectories are
 reserved placeholders in phase one. Their README files do not activate a policy
 engine, multi-agent role system, registry loader, or schema enforcement.
@@ -52,6 +52,15 @@ tracked infrastructure area, not under `.local/`.
 and standalone projects. The V2 workspace repository tracks only
 `projects/README.md`; concrete directories are ignored and excluded
 from workspace-wide recursive scans. Drafts may remain local without Git.
+Every direct concrete directory requires a top-level `AGENTS.md`; workspace
+checks verify only that shallow contract and do not recursively inspect project
+contents. Stable rules live in `AGENTS.md`, while changing execution and
+handoff state remains in the owning task or project documentation.
+Each concrete directory also requires `task.md` or `project.md`. Project state
+documents contain status, goal, acceptance criteria, decisions, progress, next
+action, blockers, and verification evidence. `workspace.py handoff <name>`
+renders those sources plus current Git context without creating a duplicate
+persistent handoff file.
 Archived or abandoned projects move to
 `storage/archives/projects/<project-name>/`. Concrete project contents remain
 outside the workspace root repository at every lifecycle stage. Long-lived or
@@ -60,8 +69,7 @@ approval.
 
 ## Common Operating Principles
 
-These principles are shared with the source workspace even though V2 uses a
-different directory layout:
+These principles define the common operating model for the workspace:
 
 - Safety rules outrank tasks, Skills, prompts, profiles, and autonomous judgment.
 - Nested rules may tighten but never weaken the root safety rules.
@@ -77,31 +85,6 @@ different directory layout:
 - Publishing, archiving, deleting, executing task commands, and changing access
   policy are separate actions requiring explicit scope and approval.
 
-## Legacy External Tasks
-
-The authoritative configuration is `.workspace/config.json`:
-
-```json
-{
-  "external_roots": {
-    "tasks": {
-      "path": "../agent_workspace/tasks",
-      "access": "read_only",
-      "env": "AGENT_TASKS_ROOT"
-    }
-  }
-}
-```
-
-The file uses JSON so the standard-library resolver can parse it without an
-additional dependency. The optional environment variable changes only the path.
-Permission remains controlled by the configuration.
-
-Tools that inspect legacy tasks must use
-`workspace_paths.resolve_external_root()`. Normal task lifecycle commands do
-not use this root. Workspace checks may check its availability but must not
-recursively scan it or write to it.
-
 ## Current Tasks And Projects
 
 Preview or create a lifecycle-managed task under `projects/`:
@@ -114,8 +97,17 @@ python -B capabilities/tools/workspace.py new my-task --complexity standard
 The task scaffold provides `task.md`, `summary.md`, task-local rules, source,
 tests, outputs, deliverables, temporary files, and logs. It uses only the
 workspace-root Skills and does not create a task-private Skill tree. Status,
-resume, doctor, verification, and closeout commands discover only directories
-containing `task.md`.
+resume, verification, and closeout remain task-specific. Doctor and handoff
+support both task state in `task.md` and standalone-project state in
+`project.md`.
+
+Before changing Agents, update the owning state file and review a generated
+handoff packet:
+
+```powershell
+python -B capabilities/tools/workspace.py doctor my-task
+python -B capabilities/tools/workspace.py handoff my-task
+```
 
 Preview or create a minimal project scaffold:
 
@@ -123,6 +115,10 @@ Preview or create a minimal project scaffold:
 python -B capabilities/tools/workspace.py project new my-project --dry-run
 python -B capabilities/tools/workspace.py project new my-project
 ```
+
+Standalone projects use `project.md` for current handoff state. Run
+`workspace.py doctor my-project` and `workspace.py handoff my-project` before
+changing Agents.
 
 The command creates project-local rules, goal documentation, source, tests,
 scripts, documentation, outputs, temporary files, and log directories. It does

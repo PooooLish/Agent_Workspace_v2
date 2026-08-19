@@ -11,7 +11,6 @@ python -B capabilities/tools/workspace.py update-status
 ## Current Health
 
 - Layout: isolated V2 control plane and capability directories.
-- Legacy external tasks access: `read_only`.
 - OS-level write isolation: not enforced by this configuration.
 
 ## Reserved Control Plane
@@ -27,6 +26,7 @@ python -B capabilities/tools/workspace.py new my_task --complexity standard --dr
 python -B capabilities/tools/workspace.py new my_task --complexity standard
 python -B capabilities/tools/workspace.py status
 python -B capabilities/tools/workspace.py resume my_task
+python -B capabilities/tools/workspace.py handoff my_task
 python -B capabilities/tools/workspace.py doctor my_task
 python -B capabilities/tools/workspace.py verify my_task
 python -B capabilities/tools/workspace.py check
@@ -34,7 +34,7 @@ python -B capabilities/tools/workspace.py check --full
 python -B capabilities/tools/workspace.py update-status
 ```
 
-Current task lifecycle commands operate under `projects/`; the legacy external task root remains read-only.
+Current task lifecycle commands operate only under `projects/`.
 
 ## Local Task And Project Policy
 
@@ -80,23 +80,29 @@ python -B capabilities/tools/workspace.py project new my-project
 - `capabilities/tools/summarize_git_candidates.py`: summarizes V2 Git candidates.
 - `capabilities/tools/task_lifecycle.py`: parses and manages lifecycle state for current tasks under projects.
 - `capabilities/tools/task_names.py`: validates portable task names.
-- `capabilities/tools/test_v2_workspace.py`: tests current project paths and legacy external-root enforcement.
+- `capabilities/tools/test_opencode_v2.py`: tests V2 OpenCode path isolation and project-boundary enforcement.
+- `capabilities/tools/test_v2_workspace.py`: tests configured V2 project-path isolation.
 - `capabilities/tools/test_workspace_tools.py`: runs focused regression tests for V2 tools.
 - `capabilities/tools/verify_baseline_report.py`: provides a compatibility entry for V2 report verification.
 - `capabilities/tools/verify_first_commit_report.py`: verifies the generated V2 first-commit report.
 - `capabilities/tools/verify_workspace_status.py`: verifies that `WORKSPACE_STATUS.md` is current.
 - `capabilities/tools/workspace.py`: provides unified V2 checks and current task lifecycle commands.
 - `capabilities/tools/workspace_manifest.py`: centralizes V2 tool metadata and maintenance commands.
-- `capabilities/tools/workspace_paths.py`: resolves configured internal and external paths.
+- `capabilities/tools/workspace_paths.py`: resolves configured internal workspace paths.
 
 ## Current Skills
 
 - `.agents/skills/cli-tool-setup`
 - `.agents/skills/code-review`
+- `.agents/skills/dependency-and-security-review`
 - `.agents/skills/documentation-writer`
+- `.agents/skills/grill-me`
+- `.agents/skills/grilling`
 - `.agents/skills/linux-debugging`
 - `.agents/skills/open-source-project-research`
 - `.agents/skills/python-project-setup`
+- `.agents/skills/systematic-debugging`
+- `.agents/skills/verification-before-completion`
 - `.agents/skills/visual-design-review`
 
 ## Current SOPs
@@ -146,4 +152,4 @@ python -B capabilities/tools/workspace.py project new my-project
 - `runtime/` contains generated and locally disposable state; only directory README files are trackable.
 - `storage/` contains durable local data; only directory README contracts are trackable.
 - `.local/envs/` and `.local/secrets/` are local-only and ignored.
-- No task, Superpowers snapshot, worktree, secret, output, log, or cache was copied from the source workspace.
+- No concrete task, worktree, secret, output, log, or cache belongs in the workspace repository.

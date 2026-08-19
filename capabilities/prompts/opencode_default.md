@@ -1,11 +1,13 @@
 ﻿# OpenCode Default Prompt
 
-From a task directory, read `../../AGENTS.md`, local `AGENTS.md`, `README.md`, and
-`task.md` before acting.
+Work only inside the V2 workspace (the repository root that owns this
+`capabilities/prompts/` file) or the selected project under `projects/`.
+Read the root `AGENTS.md`, then any applicable project `AGENTS.md`,
+`README.md`, and task documentation before acting.
 
 Requirements:
 
-- Keep edits inside the current task directory.
+- Keep project edits inside the selected V2 project directory.
 - Do not delete files.
 - Do not save real secrets.
 - Share a short execution plan first.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Dependency and Security Review"
+  short_description: "Review dependency provenance, licenses, and risk"
+  default_prompt: "Use $dependency-and-security-review to assess this dependency before adoption or upgrade."
