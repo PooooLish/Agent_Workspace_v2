@@ -22,14 +22,18 @@ AGENT_WORKSPACE_V2/
 
 `.workspace/` contains the internal path map and minimal future extension
 points. It is not a framework competing with Codex.
-The `policies/`, `profiles/`, `registry/`, and `schemas/` subdirectories are
-reserved placeholders in phase one. Their README files do not activate a policy
-engine, multi-agent role system, registry loader, or schema enforcement.
-Only `AGENTS.md`, `.workspace/config.json`, and implemented tool checks currently
-affect behavior.
+The `policies/`, `profiles/`, and `schemas/` subdirectories are reserved
+extension points. `.workspace/registry/skills.remote.json` is the active,
+machine-readable remote Skill catalog; it is metadata, not a second Skill body
+location or policy source. Implemented tool checks validate it against Git-tracked
+Skill bodies.
 
-`.agents/skills/` contains reusable Codex skills. Do not duplicate skill bodies
-under `capabilities/`.
+`.agents/skills/` is the sole reusable Codex skill body location.
+Remote Skill membership is declared in
+`.workspace/registry/skills.remote.json`. Running
+`workspace.py update-local-skills` writes every discovered non-remote Skill to
+the ignored `runtime/skills.local.json`. Both catalogs use `version`, `scope`,
+and ordered `skills` entries containing `name` and workspace-relative `path`.
 
 `capabilities/sops/` contains repeatable procedures. `capabilities/prompts/`
 contains prompt templates without authority to weaken policy.
@@ -52,10 +56,10 @@ tracked infrastructure area, not under `.local/`.
 and standalone projects. The V2 workspace repository tracks only
 `projects/README.md`; concrete directories are ignored and excluded
 from workspace-wide recursive scans. Drafts may remain local without Git.
-Every direct concrete directory requires a top-level `AGENTS.md`; workspace
-checks verify only that shallow contract and do not recursively inspect project
-contents. Stable rules live in `AGENTS.md`, while changing execution and
-handoff state remains in the owning task or project documentation.
+Every direct concrete directory uses a top-level `AGENTS.md`. Default workspace
+architecture checks exclude concrete project state; `workspace.py doctor` and
+the explicit shallow local-project check inspect handoff contracts without
+recursively scanning project contents.
 Each concrete directory also requires `task.md` or `project.md`. Project state
 documents contain status, goal, acceptance criteria, decisions, progress, next
 action, blockers, and verification evidence. `workspace.py handoff <name>`
@@ -63,27 +67,15 @@ renders those sources plus current Git context without creating a duplicate
 persistent handoff file.
 Archived or abandoned projects move to
 `storage/archives/projects/<project-name>/`. Concrete project contents remain
-outside the workspace root repository at every lifecycle stage. Long-lived or
-publishable projects may use independent Git repositories only after explicit
-approval.
+outside the workspace root repository at every lifecycle stage. Independent
+project repositories are separate ownership domains from the workspace root.
 
-## Common Operating Principles
+## Policy Source
 
-These principles define the common operating model for the workspace:
-
-- Safety rules outrank tasks, Skills, prompts, profiles, and autonomous judgment.
-- Nested rules may tighten but never weaken the root safety rules.
-- Skills match reusable intent, SOPs define procedures, prompts provide
-  non-authoritative templates, and task notes stay with their owning task.
-- Simple changes use a short conversational plan, focused verification, one
-  self-review, and no standalone spec, implementation plan, or repeated human
-  review cycle.
-- Standard work records durable state only when it improves recovery.
-- Complex or multi-agent work may use task-local plans and coordination
-  contracts.
-- Verification evidence is required before completion claims.
-- Publishing, archiving, deleting, executing task commands, and changing access
-  policy are separate actions requiring explicit scope and approval.
+`AGENTS.md` is the only permanent policy source. This guide documents topology,
+component responsibilities, and supported commands. Skills, SOPs, prompts,
+framework notes, and generated status are operational or descriptive material,
+not additional policy layers.
 
 ## Current Tasks And Projects
 
@@ -100,6 +92,11 @@ workspace-root Skills and does not create a task-private Skill tree. Status,
 resume, verification, and closeout remain task-specific. Doctor and handoff
 support both task state in `task.md` and standalone-project state in
 `project.md`.
+
+Workspace architecture checks intentionally exclude local project state, so an
+ignored concrete project cannot block framework maintenance. Use `doctor` for
+handoff readiness. The direct `check_workspace.py --local-projects` option is a
+shallow contract diagnostic and does not recurse into project contents.
 
 Before changing Agents, update the owning state file and review a generated
 handoff packet:
@@ -125,26 +122,14 @@ scripts, documentation, outputs, temporary files, and log directories. It does
 not initialize Git, install dependencies, or publish anything. It also creates
 `docs/open-source-assessment.md`.
 
-Before implementation, use read-only web and repository research to compare
-current open-source options. Prefer three to five viable candidates when
-available, and evaluate the reviewed source/version, license obligations,
-maintenance, security, technical fit, integration cost, and reuse boundary.
-Choose `greenfield`, `reference`, `integrate`, or `fork` and record the evidence
-in the generated assessment. A simple project may use a concise table and does
-not need repeated human review.
-
-Research alone does not authorize mutation. Cloning, downloading, installing a
-dependency, copying code, or creating a fork requires explicit approval.
-Missing, ambiguous, or incompatible licensing rules out code reuse; preserve
-required notices and attribution for approved reuse.
+Open-source intake requirements are defined in `AGENTS.md`; the executable
+workflow lives in `capabilities/sops/open_source_project_intake.md`. The guide
+records only where the resulting assessment belongs.
 
 The workspace repository owns the `projects/` area contract, not concrete task
-or project contents.
-When a project becomes durable or publishable, review its local files and then
-explicitly initialize an independent repository from inside that project.
-When a project is archived or abandoned, move it to
-`storage/archives/projects/<project-name>/`; the archive remains local and
-ignored by the workspace repository.
+or project contents. Independent project repositories are rooted inside their
+own project directories. Archived project placement is
+`storage/archives/projects/<project-name>/`.
 
 ## Adapter Boundaries
 
@@ -158,17 +143,16 @@ execution state or create `.worktrees/`.
 python -B capabilities/tools/test_v2_workspace.py
 python -B capabilities/tools/test_workspace_tools.py
 python -B capabilities/tools/check_workspace.py
+python -B capabilities/tools/check_workspace.py --local-projects
 python -B capabilities/tools/workspace.py check
 ```
 
-Temporary test directories must be created under `runtime/tmp/`. Before treating
-V2 as a replacement candidate, compare the source-protection baseline captured
-before and after construction and investigate any difference without attempting
-automatic repair.
+Workspace tests place temporary fixtures under `runtime/tmp/`. Baseline reports
+support before-and-after comparison when evaluating framework changes.
 
 ## Document Roles
 
 - `README.md`: user-facing introduction and quick start.
 - `AGENTS.md`: mandatory top-level Agent and safety rules.
-- `WORKSPACE_GUIDE.md`: architecture, maintenance, and extension rules.
-- `WORKSPACE_STATUS.md`: generated inventory and current state only.
+- `WORKSPACE_GUIDE.md`: architecture rationale and maintenance entry points.
+- `WORKSPACE_STATUS.md`: deterministic inventory of Git-tracked remote architecture only.

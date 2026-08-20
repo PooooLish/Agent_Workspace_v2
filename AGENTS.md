@@ -79,7 +79,7 @@
 - `storage/`: durable local artifacts and archives; the workspace repository
   tracks only its directory contracts.
 - `.local/`: ignored machine-local environments and secrets.
-- `WORKSPACE_STATUS.md`: generated current state, never permanent policy.
+- `WORKSPACE_STATUS.md`: generated remote architecture inventory, never permanent policy.
 
 ## Project Repository Isolation
 
@@ -97,6 +97,9 @@
   artifact, and archive contents must not be tracked by the root repository.
 - Workspace-wide checks must not recursively traverse concrete project
   contents.
+- Workspace architecture checks exclude concrete project state by default.
+  Use `workspace.py doctor` for local handoff health, or the explicit shallow
+  `check_workspace.py --local-projects` contract check when needed.
 - A draft task or project may remain local without Git.
 - Before committing or publishing long-lived concrete work, initialize and
   verify an independent Git repository inside its directory only after explicit

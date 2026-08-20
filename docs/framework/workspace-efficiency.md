@@ -8,6 +8,7 @@
 python -B capabilities/tools/workspace.py check
 python -B capabilities/tools/workspace.py check --full
 python -B capabilities/tools/workspace.py update-status
+python -B capabilities/tools/workspace.py update-local-skills
 python -B capabilities/tools/workspace.py status
 python -B capabilities/tools/workspace.py resume my_task
 python -B capabilities/tools/workspace.py doctor my_task
@@ -42,6 +43,12 @@ Quick checks run syntax checks, focused regressions, structure validation, Git
 candidate auditing, and line-ending validation. Full checks additionally
 summarize V2 Git candidates and verify `WORKSPACE_STATUS.md` without rewriting it.
 Run `workspace.py update-status` explicitly when the generated inventory changes.
+
+Architecture checks exclude ignored concrete project state. Run
+`workspace.py doctor` for local handoff health. `WORKSPACE_STATUS.md` uses only
+Git-tracked paths plus the validated remote Skill catalog. The separate ignored
+`runtime/skills.local.json` records discovered non-remote Skills and never feeds
+the remote status.
 
 Compatibility report scripts remain callable, but new documentation and
 automation should use `workspace.py`.

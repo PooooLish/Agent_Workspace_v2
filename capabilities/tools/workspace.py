@@ -7,7 +7,14 @@ import sys
 from pathlib import Path
 from typing import Callable, Sequence
 
-from generate_workspace_status import build_status
+from generate_workspace_status import (
+    build_local_skill_catalog,
+    build_status,
+    git_tracked_files,
+    load_remote_skill_catalog,
+    validate_remote_skill_catalog,
+    write_local_skill_catalog,
+)
 from make_project import scaffold_project, validate_project_target
 from make_task import scaffold_task, validate_task_target
 from task_lifecycle import (
@@ -92,6 +99,20 @@ def run_update_status(root: Path) -> int:
     output = root / "WORKSPACE_STATUS.md"
     output.write_text(build_status(root), encoding="utf-8", newline="\n")
     print(f"Wrote {output}")
+    return 0
+
+
+def run_update_local_skills(root: Path) -> int:
+    config = load_workspace_config(root)
+    skills = configured_path(root, config, "skills")
+    remote_manifest = configured_path(root, config, "remote_skills_manifest")
+    local_manifest = configured_path(root, config, "local_skills_manifest")
+    remote_catalog = load_remote_skill_catalog(remote_manifest)
+    tracked_files = git_tracked_files(root)
+    validate_remote_skill_catalog(root, skills, remote_catalog, tracked_files)
+    local_catalog = build_local_skill_catalog(root, skills, remote_catalog)
+    write_local_skill_catalog(local_manifest, local_catalog)
+    print(f"Wrote {local_manifest}")
     return 0
 
 
@@ -227,6 +248,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("update-status", help="regenerate the tracked workspace status")
 
+    subparsers.add_parser(
+        "update-local-skills",
+        help="refresh the ignored machine-local skill inventory",
+    )
+
     subparsers.add_parser("status", help="list current task lifecycle state under projects")
 
     resume_parser = subparsers.add_parser("resume", help="print a compact task recovery packet")
@@ -281,6 +307,8 @@ def main() -> int:
         return run_checks(root, full=args.full)
     if args.command == "update-status":
         return run_update_status(root)
+    if args.command == "update-local-skills":
+        return run_update_local_skills(root)
     task_root = task_workspace_root(root)
     if args.command == "status":
         return run_status(task_root)

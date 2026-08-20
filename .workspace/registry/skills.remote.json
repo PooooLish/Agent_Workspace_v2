@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "scope": "workspace-remote",
+  "skills": [
+    {
+      "name": "cli-tool-setup",
+      "path": ".agents/skills/cli-tool-setup"
+    },
+    {
+      "name": "code-review",
+      "path": ".agents/skills/code-review"
+    },
+    {
+      "name": "dependency-and-security-review",
+      "path": ".agents/skills/dependency-and-security-review"
+    },
+    {
+      "name": "documentation-writer",
+      "path": ".agents/skills/documentation-writer"
+    },
+    {
+      "name": "grill-me",
+      "path": ".agents/skills/grill-me"
+    },
+    {
+      "name": "grilling",
+      "path": ".agents/skills/grilling"
+    },
+    {
+      "name": "linux-debugging",
+      "path": ".agents/skills/linux-debugging"
+    },
+    {
+      "name": "open-source-project-research",
+      "path": ".agents/skills/open-source-project-research"
+    },
+    {
+      "name": "python-project-setup",
+      "path": ".agents/skills/python-project-setup"
+    },
+    {
+      "name": "systematic-debugging",
+      "path": ".agents/skills/systematic-debugging"
+    },
+    {
+      "name": "verification-before-completion",
+      "path": ".agents/skills/verification-before-completion"
+    },
+    {
+      "name": "visual-design-review",
+      "path": ".agents/skills/visual-design-review"
+    }
+  ]
+}

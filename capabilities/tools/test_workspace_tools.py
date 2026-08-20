@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import json
 import re
 import subprocess
 import sys
@@ -232,6 +233,84 @@ class ScaffoldTests(unittest.TestCase):
             any("project.md is missing handoff sections" in issue for issue in issues),
             issues,
         )
+
+    def test_task_state_requires_handoff_sections(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            task = projects_root / "incomplete"
+            task.mkdir(parents=True)
+            (task / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (task / "task.md").write_text(
+                "# Task: incomplete\n\n## Goal\n\nKeep it working.\n",
+                encoding="utf-8",
+            )
+
+            issues = check_workspace.project_rule_issues(projects_root)
+
+        self.assertTrue(
+            any("task.md is missing handoff sections" in issue for issue in issues),
+            issues,
+        )
+
+    def test_default_workspace_check_excludes_local_project_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            projects_root = root / "projects"
+            project = projects_root / "incomplete"
+            project.mkdir(parents=True)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (project / "project.md").write_text("# Project\n", encoding="utf-8")
+            config = {
+                "paths": {
+                    "projects": "projects",
+                    "skills": ".agents/skills",
+                    "tools": "capabilities/tools",
+                }
+            }
+
+            with (
+                patch.object(check_workspace, "REQUIRED_ITEMS", ()),
+                patch.object(check_workspace, "LEGACY_ROOTS", ()),
+                patch.object(check_workspace, "LINK_SCAN_ROOTS", ()),
+                patch.object(check_workspace, "TOOL_DESCRIPTIONS", {}),
+                patch.object(check_workspace, "load_workspace_config", return_value=config),
+                patch.object(check_workspace, "git_tracked_files", return_value=[]),
+            ):
+                issues = check_workspace.check_workspace(root)
+
+        self.assertFalse(
+            any("handoff sections" in issue for issue in issues),
+            issues,
+        )
+
+    def test_tracked_boundary_rejects_all_local_and_storage_content(self) -> None:
+        issues = check_workspace.tracked_boundary_issues(
+            {
+                ".local/README.md",
+                ".local/private.json",
+                "storage/artifacts/README.md",
+                "storage/archives/README.md",
+                "storage/private.bin",
+            }
+        )
+
+        self.assertEqual(
+            issues,
+            [
+                "local storage content must not be tracked by the workspace repository: storage/private.bin",
+                "private/runtime file is tracked: .local/private.json",
+            ],
+        )
+
+    def test_gitignore_covers_all_local_and_storage_content(self) -> None:
+        for relative in (".local/private.json", "storage/private.bin"):
+            with self.subTest(relative=relative):
+                result = subprocess.run(
+                    ["git", "check-ignore", "--quiet", relative],
+                    cwd=ROOT,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, relative)
 
     def test_handoff_packet_supports_project_state(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
@@ -700,6 +779,184 @@ None.
 
 
 class V2IntegrationTests(unittest.TestCase):
+    def test_git_status_inventory_excludes_untracked_files(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+            tracked = root / "tracked.md"
+            untracked = root / "untracked.md"
+            tracked.write_text("# Tracked\n", encoding="utf-8")
+            untracked.write_text("# Untracked\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.md"], cwd=root, check=True)
+
+            inventory = generate_workspace_status.git_tracked_files(root)
+
+        self.assertEqual(inventory, {"tracked.md"})
+
+    def test_local_skill_catalog_contains_only_non_remote_skills(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            skills = root / ".agents" / "skills"
+            for name in ("remote-skill", "local-skill"):
+                skill_file = skills / name / "SKILL.md"
+                skill_file.parent.mkdir(parents=True, exist_ok=True)
+                skill_file.write_text(f"# {name}\n", encoding="utf-8")
+            remote_catalog = {
+                "version": 1,
+                "scope": "workspace-remote",
+                "skills": [
+                    {
+                        "name": "remote-skill",
+                        "path": ".agents/skills/remote-skill",
+                    }
+                ],
+            }
+            catalog = generate_workspace_status.build_local_skill_catalog(
+                root,
+                skills,
+                remote_catalog,
+            )
+
+        self.assertEqual(
+            catalog,
+            {
+                "version": 1,
+                "scope": "workspace-local",
+                "skills": [
+                    {
+                        "name": "local-skill",
+                        "path": ".agents/skills/local-skill",
+                    }
+                ],
+            },
+        )
+        self.assertEqual(json.loads(json.dumps(catalog)), catalog)
+
+    def test_remote_skill_catalog_must_match_tracked_skill_bodies(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            skills = root / ".agents" / "skills"
+            for name in ("declared", "missing-from-catalog"):
+                skill_file = skills / name / "SKILL.md"
+                skill_file.parent.mkdir(parents=True, exist_ok=True)
+                skill_file.write_text(f"# {name}\n", encoding="utf-8")
+            catalog = {
+                "version": 1,
+                "scope": "workspace-remote",
+                "skills": [
+                    {
+                        "name": "declared",
+                        "path": ".agents/skills/declared",
+                    }
+                ],
+            }
+            tracked = {
+                ".agents/skills/declared/SKILL.md",
+                ".agents/skills/missing-from-catalog/SKILL.md",
+            }
+            with self.assertRaisesRegex(ValueError, "missing from remote catalog"):
+                generate_workspace_status.validate_remote_skill_catalog(
+                    root,
+                    skills,
+                    catalog,
+                    tracked,
+                )
+
+    def test_status_generation_enforces_remote_skill_catalog(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            skills = root / ".agents" / "skills"
+            skill_file = skills / "tracked-but-undeclared" / "SKILL.md"
+            skill_file.parent.mkdir(parents=True)
+            skill_file.write_text("# Undeclared\n", encoding="utf-8")
+            for relative in (
+                "capabilities/sops",
+                "capabilities/prompts",
+                "docs/framework",
+                "docs/environments",
+            ):
+                (root / relative).mkdir(parents=True)
+            manifest = root / ".workspace" / "registry" / "skills.remote.json"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "scope": "workspace-remote",
+                        "skills": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = {
+                "paths": {
+                    "skills": ".agents/skills",
+                    "sops": "capabilities/sops",
+                    "prompts": "capabilities/prompts",
+                    "framework_docs": "docs/framework",
+                    "environment_docs": "docs/environments",
+                    "remote_skills_manifest": ".workspace/registry/skills.remote.json",
+                }
+            }
+
+            with (
+                patch.object(
+                    generate_workspace_status,
+                    "load_workspace_config",
+                    return_value=config,
+                ),
+                patch.object(
+                    generate_workspace_status,
+                    "git_tracked_files",
+                    return_value={
+                        ".agents/skills/tracked-but-undeclared/SKILL.md",
+                    },
+                ),
+                self.assertRaisesRegex(ValueError, "missing from remote catalog"),
+            ):
+                generate_workspace_status.build_status(root)
+
+    def test_tool_inventory_excludes_untracked_tools(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            tracked = "capabilities/tools/tracked.py"
+            local = "capabilities/tools/local.py"
+            for relative in (tracked, local):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("# tool\n", encoding="utf-8")
+            with patch.object(
+                generate_workspace_status,
+                "TOOL_DESCRIPTIONS",
+                {tracked: "tracked", local: "local"},
+            ):
+                items = generate_workspace_status.tracked_tool_items(root, {tracked})
+
+        self.assertEqual(items, [f"- `{tracked}`: tracked"])
+
+    def test_local_skill_catalog_writer_creates_machine_local_manifest(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            output = Path(directory) / "runtime" / "skills.local.json"
+            catalog = {
+                "version": 1,
+                "scope": "workspace-local",
+                "skills": [
+                    {
+                        "name": "local-skill",
+                        "path": ".agents/skills/local-skill",
+                    }
+                ],
+            }
+            generate_workspace_status.write_local_skill_catalog(output, catalog)
+
+            self.assertEqual(
+                json.loads(output.read_text(encoding="utf-8")),
+                catalog,
+            )
+
+    def test_workspace_parser_exposes_local_skill_inventory_update(self) -> None:
+        self.assertIn("update-local-skills", workspace.build_parser().format_help())
+
     def test_status_inventory_uses_configured_internal_paths(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
             base = Path(directory)
@@ -729,6 +986,28 @@ class V2IntegrationTests(unittest.TestCase):
                 generate_workspace_status,
                 "load_workspace_config",
                 return_value=config,
+            ), patch.object(
+                generate_workspace_status,
+                "git_tracked_files",
+                return_value={
+                    (skills / "configured-skill" / "SKILL.md").relative_to(ROOT).as_posix(),
+                    *((path / "configured-marker.md").relative_to(ROOT).as_posix() for path in (sops, prompts, environments)),
+                },
+            ), patch.object(
+                generate_workspace_status,
+                "load_remote_skill_catalog",
+                return_value={
+                    "version": 1,
+                    "scope": "workspace-remote",
+                    "skills": [
+                        {
+                            "name": "configured-skill",
+                            "path": (skills / "configured-skill")
+                            .relative_to(ROOT)
+                            .as_posix(),
+                        }
+                    ],
+                },
             ):
                 status = generate_workspace_status.build_status(ROOT)
 
@@ -942,11 +1221,19 @@ class V2IntegrationTests(unittest.TestCase):
         second = generate_workspace_status.build_status(ROOT)
         self.assertEqual(first, second)
         self.assertNotIn("external_roots", first)
-        self.assertIn("## Reserved Control Plane", first)
-        self.assertIn("## Current Framework Docs", first)
-        self.assertIn("## Local Task And Project Policy", first)
-        self.assertIn("workspace repository tracks only `projects/README.md`", first)
+        self.assertIn("Permanent policy lives only in `AGENTS.md`.", first)
+        self.assertIn("## Remote Framework Docs", first)
         self.assertIn("docs/framework/task-lifecycle.md", first)
+        self.assertNotIn("## Current ", first)
+        for policy_heading in (
+            "## Reserved Control Plane",
+            "## Local Task And Project Policy",
+            "## Review Proportionality",
+            "## Open Source Intake",
+            "## Runtime Policy",
+        ):
+            with self.subTest(policy_heading=policy_heading):
+                self.assertNotIn(policy_heading, first)
 
     def test_markdown_inventory_uses_portable_casefolded_order(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
@@ -999,7 +1286,7 @@ class V2IntegrationTests(unittest.TestCase):
         self.assertNotIn("regenerate and\nverify `WORKSPACE_STATUS.md`", efficiency)
         self.assertIn("verify `WORKSPACE_STATUS.md` without rewriting it", efficiency)
 
-    def test_v2_docs_preserve_common_safety_and_lifecycle_contracts(self) -> None:
+    def test_v2_docs_keep_policy_in_agents_and_lifecycle_design_in_docs(self) -> None:
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         for required in (
             "global shell configuration",
@@ -1020,7 +1307,12 @@ class V2IntegrationTests(unittest.TestCase):
             self.assertIn(heading, lifecycle)
 
         guide = (ROOT / "WORKSPACE_GUIDE.md").read_text(encoding="utf-8")
-        self.assertIn("## Common Operating Principles", guide)
+        self.assertIn("## Policy Source", guide)
+        self.assertIn("`AGENTS.md` is the only permanent policy source", guide)
+        self.assertNotIn("## Common Operating Principles", guide)
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("[AGENTS.md](AGENTS.md) 是唯一的永久政策来源", readme)
 
     def test_no_forbidden_source_assets_were_copied(self) -> None:
         for relative in (

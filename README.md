@@ -7,6 +7,7 @@
 
 ```powershell
 python -B capabilities/tools/workspace.py check
+python -B capabilities/tools/workspace.py update-local-skills
 python -B capabilities/tools/workspace.py status
 python -B capabilities/tools/workspace.py doctor
 python -B capabilities/tools/workspace.py new my-task --dry-run
@@ -27,24 +28,18 @@ python -B capabilities/tools/workspace.py project new my-project --dry-run
 - `.local/`：本机环境和凭据，默认禁止读取并由 Git 忽略
 - `docs/`：框架与环境文档
 
-## 工作方式
+## 文档入口
 
-- `AGENTS.md` 是强制规则；Skill、SOP 和 Prompt 都不能降低其安全要求。
-- Skill 用于按意图匹配可复用能力，SOP 用于直接执行固定流程，Prompt 只是非强制模板。
-- 简单任务只需简短对话计划、聚焦验证和一次自审，不创建规格/计划文件，也不增加
-  不必要的多轮人工确认；复杂或多 Agent 任务才使用正式计划与协调契约。
-- 新项目实施前先只读筛查当前开源资料和仓库，并记录许可证、维护、安全、适配性及
-  复用边界。简单项目使用简表即可；克隆、下载、安装依赖、复制代码或 fork 仍需明确授权。
-- `workspace.py check --full` 只验证状态，不自动重写文档；需要更新清单时显式运行
-  `workspace.py update-status`。
-- `new`、`status`、`verify` 和 `close` 只操作 `projects/` 中的当前任务；运行写操作前
-  仍须获得明确授权。
-- 发布 V2 或独立任务前，分别检查候选文件、密钥、私有数据、大文件和目标仓库。
-- V2 远端仓库只维护 workspace 架构。具体项目、运行状态、产物和归档均保持本地；
-  根仓库只跟踪这些目录的规则说明。
+- [AGENTS.md](AGENTS.md) 是唯一的永久政策来源。
+- [WORKSPACE_GUIDE.md](WORKSPACE_GUIDE.md) 解释目录结构、组件职责和维护入口，不定义政策。
+- [WORKSPACE_STATUS.md](WORKSPACE_STATUS.md) 是仅基于 Git 跟踪内容生成的远端架构清单，不定义政策。
+- `.workspace/registry/skills.remote.json` 是远端 Skill 权威清单；
+  `runtime/skills.local.json` 是忽略的本机 Skill 清单。
+- Skill 用于意图匹配，SOP 用于具体流程，Prompt 用于非强制模板。
+- `workspace.py check` 检查可提交架构，`workspace.py doctor` 检查本地任务和项目交接状态。
+- V2 远端只保存 workspace 架构；本地工作区由 Git 边界与 `AGENTS.md` 约束。
 
-完整设计与维护规则见 [WORKSPACE_GUIDE.md](WORKSPACE_GUIDE.md)，Agent 顶层规则
-见 [AGENTS.md](AGENTS.md)，当前状态见 [WORKSPACE_STATUS.md](WORKSPACE_STATUS.md)。
+完整政策直接阅读 [AGENTS.md](AGENTS.md)。
 
 <details>
 <summary><strong>English</strong></summary>
@@ -59,6 +54,7 @@ machine-local private data. Current tasks and projects live under `projects/`.
 
 ```powershell
 python -B capabilities/tools/workspace.py check
+python -B capabilities/tools/workspace.py update-local-skills
 python -B capabilities/tools/workspace.py status
 python -B capabilities/tools/workspace.py doctor
 python -B capabilities/tools/workspace.py new my-task --dry-run
@@ -69,31 +65,19 @@ python -B capabilities/tools/workspace.py project new my-project --dry-run
 does not configure, resolve, or maintain historical task directories outside
 this workspace.
 
-## Operating Model
+## Document Entry Points
 
-- `AGENTS.md` is mandatory; Skills, SOPs, and prompts cannot weaken its safety
-  rules.
-- Skills match reusable intent, SOPs define direct procedures, and prompts are
-  non-authoritative templates.
-- Simple work uses a short conversational plan, focused verification, one
-  self-review, and no formal spec or repeated approval cycle. Complex or
-  multi-agent work may use task-local plans and coordination contracts.
-- Before implementation, new projects use read-only research to assess current
-  open-source options, licensing, maintenance, security, fit, and reuse
-  boundaries. Simple projects may use a concise table; cloning, downloading,
-  installing, copying code, or forking still requires explicit approval.
-- `workspace.py check --full` verifies tracked status without rewriting it. Run
-  `workspace.py update-status` explicitly when the inventory changes.
-- `new`, `status`, `verify`, and `close` operate only on current tasks under
-  `projects/`; write operations still require explicit approval.
-- The V2 remote maintains workspace architecture only. Concrete projects,
-  runtime state, artifacts, and archives remain local; only their directory
-  contracts are tracked.
-- Review candidates, secrets, private data, large files, and the destination
-  repository separately before publishing V2 or an independent task.
-
-See [WORKSPACE_GUIDE.md](WORKSPACE_GUIDE.md) for architecture and maintenance,
-[AGENTS.md](AGENTS.md) for mandatory Agent rules, and
-[WORKSPACE_STATUS.md](WORKSPACE_STATUS.md) for generated current state.
+- [AGENTS.md](AGENTS.md) is the only permanent policy source.
+- [WORKSPACE_GUIDE.md](WORKSPACE_GUIDE.md) explains architecture and maintenance
+  entry points without defining policy.
+- [WORKSPACE_STATUS.md](WORKSPACE_STATUS.md) is remote architecture inventory
+  generated only from Git-tracked content, not policy.
+- `.workspace/registry/skills.remote.json` is the authoritative remote Skill
+  catalog; `runtime/skills.local.json` is the ignored machine-local catalog.
+- Skills match intent, SOPs describe procedures, and prompts are optional templates.
+- `workspace.py check` validates publishable architecture; `workspace.py doctor`
+  reports local task and project handoff health.
+- The V2 remote stores workspace architecture only; Git boundaries and
+  `AGENTS.md` govern local content.
 
 </details>

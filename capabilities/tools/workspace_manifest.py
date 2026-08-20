@@ -57,7 +57,7 @@ TOOL_DESCRIPTIONS = {
     "capabilities/tools/audit_line_endings.py": "reports line ending drift against `.gitattributes` policy.",
     "capabilities/tools/check_workspace.py": "checks the V2 structure, ignore policy, adapters, and legacy external-root boundary.",
     "capabilities/tools/check_python_syntax.py": "checks maintained Python source without writing bytecode.",
-    "capabilities/tools/generate_workspace_status.py": "regenerates the current-state summary.",
+    "capabilities/tools/generate_workspace_status.py": "regenerates the tracked remote architecture inventory.",
     "capabilities/tools/make_project.py": "creates a local project scaffold without initializing Git.",
     "capabilities/tools/make_task.py": "creates lifecycle-managed task scaffolds under the configured projects root.",
     "capabilities/tools/prepare_baseline_report.py": "provides a compatibility entry for the V2 first-commit report.",

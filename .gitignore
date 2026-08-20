@@ -1,7 +1,10 @@
-# Machine-local environments and credentials
-.local/envs/**
-.local/secrets/**
-.local/opencode/**
+# Machine-local environments, credentials, and state; keep only the contract
+.local/**
+!.local/
+!.local/README.md
+
+# Restrictive-license third-party Skills kept local to this workspace
+.agents/skills/photo-abstract-editorial/**
 
 # Runtime state; keep only directory contracts
 runtime/**
@@ -22,10 +25,11 @@ runtime/**
 projects/**
 !projects/README.md
 
-# Durable artifacts and archives remain local; keep only directory contracts
-storage/artifacts/**
-storage/archives/**
+# Durable local state; keep only directory contracts
+storage/**
+!storage/artifacts/
 !storage/artifacts/README.md
+!storage/archives/
 !storage/archives/README.md
 
 # Common generated files

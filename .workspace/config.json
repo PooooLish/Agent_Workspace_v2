@@ -2,6 +2,8 @@
   "version": 1,
   "paths": {
     "skills": ".agents/skills",
+    "remote_skills_manifest": ".workspace/registry/skills.remote.json",
+    "local_skills_manifest": "runtime/skills.local.json",
     "sops": "capabilities/sops",
     "prompts": "capabilities/prompts",
     "tools": "capabilities/tools",

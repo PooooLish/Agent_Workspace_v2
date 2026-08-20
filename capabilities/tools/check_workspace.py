@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import os
 import re
 import subprocess
@@ -49,8 +50,9 @@ REQUIRED_ITEMS = (
 )
 
 REQUIRED_IGNORE_PATTERNS = (
-    ".local/envs/**",
-    ".local/secrets/**",
+    ".local/**",
+    "!.local/",
+    "!.local/README.md",
     "runtime/**",
     "!runtime/task-state/",
     "!runtime/task-state/README.md",
@@ -66,9 +68,10 @@ REQUIRED_IGNORE_PATTERNS = (
     "!runtime/sandboxes/README.md",
     "projects/**",
     "!projects/README.md",
-    "storage/artifacts/**",
-    "storage/archives/**",
+    "storage/**",
+    "!storage/artifacts/",
     "!storage/artifacts/README.md",
+    "!storage/archives/",
     "!storage/archives/README.md",
     "**/__pycache__/",
     ".env",
@@ -96,6 +99,16 @@ PROJECT_HANDOFF_SECTIONS = (
     "Next Action",
     "Blockers",
     "Verification",
+)
+TASK_HANDOFF_SECTIONS = (
+    "Status",
+    "Goal",
+    "Acceptance criteria",
+    "Verification commands",
+    "Decisions",
+    "Progress",
+    "Next action",
+    "Blockers",
 )
 
 
@@ -165,8 +178,12 @@ def project_rule_issues(projects_root: Path) -> list[str]:
         task_state = project / "task.md"
         project_state = project / "project.md"
         if task_state.is_file():
-            continue
-        if not project_state.is_file():
+            state_file = task_state
+            required_sections = TASK_HANDOFF_SECTIONS
+        elif project_state.is_file():
+            state_file = project_state
+            required_sections = PROJECT_HANDOFF_SECTIONS
+        else:
             issues.append(
                 "concrete task or project is missing task.md or project.md: "
                 + relative
@@ -176,14 +193,14 @@ def project_rule_issues(projects_root: Path) -> list[str]:
             match.group(1).strip()
             for match in re.finditer(
                 r"^##[ \t]+(.+?)[ \t]*$",
-                project_state.read_text(encoding="utf-8"),
+                state_file.read_text(encoding="utf-8"),
                 re.MULTILINE,
             )
         }
-        missing = [heading for heading in PROJECT_HANDOFF_SECTIONS if heading not in headings]
+        missing = [heading for heading in required_sections if heading not in headings]
         if missing:
             issues.append(
-                f"project.md is missing handoff sections in {relative}: "
+                f"{state_file.name} is missing handoff sections in {relative}: "
                 + ", ".join(missing)
             )
     return issues
@@ -238,7 +255,40 @@ def iter_link_candidates(root: Path) -> Iterator[Path]:
                         pending.append(path)
 
 
-def check_workspace(root: Path) -> list[str]:
+def tracked_boundary_issues(tracked: set[str]) -> list[str]:
+    issues: list[str] = []
+    runtime_contracts = {
+        "runtime/task-state/README.md",
+        "runtime/runs/README.md",
+        "runtime/outputs/README.md",
+        "runtime/logs/README.md",
+        "runtime/tmp/README.md",
+        "runtime/sandboxes/README.md",
+    }
+    storage_contracts = {
+        "storage/artifacts/README.md",
+        "storage/archives/README.md",
+    }
+    for relative in tracked:
+        normalized = relative.replace("\\", "/")
+        if normalized.startswith(".local/") and normalized != ".local/README.md":
+            issues.append(f"private/runtime file is tracked: {normalized}")
+        if normalized.startswith("runtime/") and normalized not in runtime_contracts:
+            issues.append(f"private/runtime file is tracked: {normalized}")
+        if normalized.startswith("projects/") and normalized != "projects/README.md":
+            issues.append(
+                "project content must not be tracked by the workspace repository: "
+                f"{normalized}"
+            )
+        if normalized.startswith("storage/") and normalized not in storage_contracts:
+            issues.append(
+                "local storage content must not be tracked by the workspace repository: "
+                f"{normalized}"
+            )
+    return sorted(set(issues))
+
+
+def check_workspace(root: Path, *, include_projects: bool = False) -> list[str]:
     issues: list[str] = []
     for relative in REQUIRED_ITEMS:
         if not (root / relative).exists():
@@ -276,40 +326,12 @@ def check_workspace(root: Path) -> list[str]:
 
     skills_root = configured_path(root, config, "skills")
     issues.extend(skill_issues(skills_root))
-    projects_root = configured_path(root, config, "projects")
-    issues.extend(project_rule_issues(projects_root))
+    if include_projects:
+        projects_root = configured_path(root, config, "projects")
+        issues.extend(project_rule_issues(projects_root))
 
     tracked = set(git_tracked_files(root))
-    runtime_contracts = {
-        "runtime/task-state/README.md",
-        "runtime/runs/README.md",
-        "runtime/outputs/README.md",
-        "runtime/logs/README.md",
-        "runtime/tmp/README.md",
-        "runtime/sandboxes/README.md",
-    }
-    storage_contracts = {
-        "storage/artifacts/README.md",
-        "storage/archives/README.md",
-    }
-    for relative in tracked:
-        normalized = relative.replace("\\", "/")
-        if normalized.startswith((".local/envs/", ".local/secrets/")):
-            issues.append(f"private/runtime file is tracked: {normalized}")
-        if normalized.startswith("runtime/") and normalized not in runtime_contracts:
-            issues.append(f"private/runtime file is tracked: {normalized}")
-        if normalized.startswith("projects/") and normalized != "projects/README.md":
-            issues.append(
-                "project content must not be tracked by the workspace repository: "
-                f"{normalized}"
-            )
-        if normalized.startswith(
-            ("storage/artifacts/", "storage/archives/")
-        ) and normalized not in storage_contracts:
-            issues.append(
-                "local storage content must not be tracked by the workspace "
-                f"repository: {normalized}"
-            )
+    issues.extend(tracked_boundary_issues(tracked))
 
     tools_root = configured_path(root, config, "tools")
     actual_tools = {
@@ -327,7 +349,14 @@ def check_workspace(root: Path) -> list[str]:
 
 def main() -> int:
     root = workspace_root()
-    issues = check_workspace(root)
+    parser = argparse.ArgumentParser(description="Check the V2 workspace architecture.")
+    parser.add_argument(
+        "--local-projects",
+        action="store_true",
+        help="also validate direct child project handoff contracts",
+    )
+    args = parser.parse_args()
+    issues = check_workspace(root, include_projects=args.local_projects)
     if issues:
         print("Workspace check failed:")
         for issue in issues:

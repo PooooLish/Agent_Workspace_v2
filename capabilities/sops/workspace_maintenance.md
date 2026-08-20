@@ -6,13 +6,17 @@ Use this SOP after broad workspace edits, before handoff, and periodically while
 
 1. Run `python -B capabilities/tools/workspace.py check` for a quick, read-only routine check.
 2. Run `python -B capabilities/tools/workspace.py check --full` before broad framework handoff.
-3. Review `WORKSPACE_STATUS.md` after a full check.
-4. Run `git ls-files runtime .local` and confirm only intended README contracts
-   are tracked from local or regenerable areas.
-5. Update root docs when the workspace structure, tools, SOPs, prompts, or safety model changes.
-6. Keep task-specific details inside task folders unless the knowledge is reusable across tasks.
-7. Do not recursively scan concrete `projects/` contents or the legacy external
-   tasks root during framework maintenance.
+3. Run `python -B capabilities/tools/workspace.py update-local-skills` when local
+   Skill discovery changes, then review the ignored `runtime/skills.local.json`.
+4. Review `WORKSPACE_STATUS.md` as the Git-tracked remote architecture inventory
+   after a full check; regenerate it explicitly with `workspace.py update-status`.
+5. Run `git ls-files runtime storage .local` and confirm only intended README
+   contracts are tracked from local, durable, or regenerable areas.
+6. Update root docs when the workspace structure, tools, SOPs, prompts, or safety model changes.
+7. Keep task-specific details inside task folders unless the knowledge is reusable across tasks.
+8. Run `workspace.py doctor` separately when local project handoff health is in
+   scope. Do not recursively scan concrete `projects/` contents during framework
+   maintenance.
 
 ## When To Run
 

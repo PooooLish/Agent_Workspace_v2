@@ -86,6 +86,21 @@ $env:TMPDIR = $env:TEMP
     New-Item -ItemType Directory -Path $_ -Force | Out-Null
 }
 
+# Desktop shortcuts and long-lived terminals can retain an old PATH after the
+# user npm prefix changes. Read the persisted user value so this launcher finds
+# the managed OpenCode installation without requiring a Windows sign-out.
+$userNpmPrefix = [Environment]::GetEnvironmentVariable(
+    "NPM_CONFIG_PREFIX",
+    "User"
+)
+if (
+    -not [string]::IsNullOrWhiteSpace($userNpmPrefix) -and
+    (Test-Path -LiteralPath $userNpmPrefix -PathType Container)
+) {
+    $env:NPM_CONFIG_PREFIX = $userNpmPrefix
+    $env:Path = $userNpmPrefix + [System.IO.Path]::PathSeparator + $env:Path
+}
+
 Push-Location -LiteralPath $projectPath
 try {
     if ($OpenCodeArguments.Count -eq 0) {
