@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import io
-import os
+import json
 import re
 import subprocess
 import sys
@@ -18,20 +18,21 @@ import audit_git_readiness
 import check_python_syntax
 import check_workspace
 import generate_workspace_status
+import make_project
 import make_task
 import prepare_first_commit_report
 import task_lifecycle
 import workspace
 from task_names import validate_task_name
 from workspace_manifest import FULL_ONLY_STEPS, QUICK_CHECK_STEPS, TOOL_DESCRIPTIONS
-from workspace_paths import load_workspace_config, resolve_external_root, workspace_root
+from workspace_paths import load_workspace_config, workspace_root
 
 
 ROOT = workspace_root()
 TMP_ROOT = ROOT / "runtime" / "tmp"
 
 
-class TaskScaffoldTests(unittest.TestCase):
+class ScaffoldTests(unittest.TestCase):
     def test_portable_task_names(self) -> None:
         for name in ("task1", "task_name", "task-name_123"):
             with self.subTest(name=name):
@@ -55,6 +56,45 @@ class TaskScaffoldTests(unittest.TestCase):
             self.assertFalse((tasks_root / "example" / "docs" / "superpowers").exists())
             self.assertIn(str(tasks_root / "example" / "summary.md"), created)
 
+    def test_task_scaffold_uses_only_workspace_root_skills(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            make_task.scaffold_task(projects_root, "example", complexity="simple")
+            task = projects_root / "example"
+
+            self.assertFalse((task / ".agents").exists())
+            self.assertFalse((task / "docs" / "skills").exists())
+            self.assertNotIn(
+                "task-specific skills",
+                (task / "AGENTS.md").read_text(encoding="utf-8"),
+            )
+            self.assertNotIn("docs/skills", (task / "README.md").read_text(encoding="utf-8"))
+
+    def test_task_scaffold_rejects_existing_project_without_changes(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            project = projects_root / "example"
+            project.mkdir(parents=True)
+            marker = project / "keep.txt"
+            marker.write_text("unchanged", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_task.scaffold_task(projects_root, "example")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "unchanged")
+
+    def test_task_scaffold_rejects_a_file_name_collision(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            projects_root.mkdir()
+            marker = projects_root / "example"
+            marker.write_text("unchanged", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_task.scaffold_task(projects_root, "example")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "unchanged")
+
     def test_complex_scaffold_has_explicit_coordination_files(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
             tasks_root = Path(directory) / "custom-projects"
@@ -63,6 +103,553 @@ class TaskScaffoldTests(unittest.TestCase):
             task = tasks_root / "example"
             self.assertTrue((task / "docs" / "superpowers" / "README.md").is_file())
             self.assertTrue((task / "coordination" / "contract.md").is_file())
+
+
+    def test_scaffold_creates_project_without_initializing_git(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            created, skipped = make_project.scaffold_project(
+                projects_root,
+                "example-project",
+            )
+
+            project = projects_root / "example-project"
+            self.assertFalse(skipped)
+            self.assertTrue((project / "project.md").is_file())
+            self.assertTrue((project / "AGENTS.md").is_file())
+            self.assertFalse((project / ".git").exists())
+            self.assertIn(str(project / "README.md"), created)
+
+    def test_project_scaffold_includes_open_source_assessment(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            make_project.scaffold_project(projects_root, "example-project")
+
+            assessment = (
+                projects_root
+                / "example-project"
+                / "docs"
+                / "open-source-assessment.md"
+            )
+            text = assessment.read_text(encoding="utf-8")
+
+        for heading in (
+            "## Search Scope",
+            "## Candidates",
+            "## License and Obligations",
+            "## Security and Maintenance",
+            "## Decision",
+            "## Reuse Boundary",
+        ):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, text)
+
+    def test_generated_project_rules_require_open_source_intake(self) -> None:
+        rules = make_project.build_agents("example-project")
+        self.assertIn("open-source-assessment.md", rules)
+        self.assertIn("before implementation", rules)
+
+    def test_generated_project_rules_require_handoff_update(self) -> None:
+        rules = make_project.build_agents("example-project")
+        self.assertIn("Before changing Agents", rules)
+        self.assertIn("Progress", rules)
+        self.assertIn("Next Action", rules)
+        self.assertIn(
+            "python -B capabilities/tools/workspace.py handoff example-project",
+            rules,
+        )
+
+    def test_generated_project_state_contains_handoff_fields(self) -> None:
+        state = make_project.build_project_md("example-project")
+        for heading in (
+            "## Status",
+            "## Goal",
+            "## Acceptance Criteria",
+            "## Decisions",
+            "## Progress",
+            "## Next Action",
+            "## Blockers",
+            "## Verification",
+        ):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, state)
+
+    def test_every_concrete_project_requires_top_level_agents(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            complete = projects_root / "complete"
+            missing = projects_root / "missing"
+            complete.mkdir(parents=True)
+            missing.mkdir()
+            (complete / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (complete / "project.md").write_text(
+                make_project.build_project_md("complete"),
+                encoding="utf-8",
+            )
+            (missing / "task.md").write_text(
+                make_task.build_task_md("missing"),
+                encoding="utf-8",
+            )
+
+            issues = check_workspace.project_rule_issues(projects_root)
+
+        self.assertEqual(
+            issues,
+            [
+                "concrete task or project is missing top-level AGENTS.md: "
+                "projects/missing"
+            ],
+        )
+
+    def test_concrete_project_requires_task_or_project_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            project = projects_root / "missing-state"
+            project.mkdir(parents=True)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+
+            issues = check_workspace.project_rule_issues(projects_root)
+
+        self.assertIn(
+            "concrete task or project is missing task.md or project.md: "
+            "projects/missing-state",
+            issues,
+        )
+
+    def test_project_state_requires_handoff_sections(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            project = projects_root / "incomplete"
+            project.mkdir(parents=True)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (project / "project.md").write_text(
+                "# Project: incomplete\n\n## Goal\n\nKeep it working.\n",
+                encoding="utf-8",
+            )
+
+            issues = check_workspace.project_rule_issues(projects_root)
+
+        self.assertTrue(
+            any("project.md is missing handoff sections" in issue for issue in issues),
+            issues,
+        )
+
+    def test_task_state_requires_handoff_sections(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            task = projects_root / "incomplete"
+            task.mkdir(parents=True)
+            (task / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (task / "task.md").write_text(
+                "# Task: incomplete\n\n## Goal\n\nKeep it working.\n",
+                encoding="utf-8",
+            )
+
+            issues = check_workspace.project_rule_issues(projects_root)
+
+        self.assertTrue(
+            any("task.md is missing handoff sections" in issue for issue in issues),
+            issues,
+        )
+
+    def test_default_workspace_check_excludes_local_project_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            projects_root = root / "projects"
+            project = projects_root / "incomplete"
+            project.mkdir(parents=True)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (project / "project.md").write_text("# Project\n", encoding="utf-8")
+            config = {
+                "paths": {
+                    "projects": "projects",
+                    "skills": ".agents/skills",
+                    "tools": "capabilities/tools",
+                }
+            }
+
+            with (
+                patch.object(check_workspace, "REQUIRED_ITEMS", ()),
+                patch.object(check_workspace, "LEGACY_ROOTS", ()),
+                patch.object(check_workspace, "LINK_SCAN_ROOTS", ()),
+                patch.object(check_workspace, "TOOL_DESCRIPTIONS", {}),
+                patch.object(check_workspace, "load_workspace_config", return_value=config),
+                patch.object(check_workspace, "git_tracked_files", return_value=[]),
+            ):
+                issues = check_workspace.check_workspace(root)
+
+        self.assertFalse(
+            any("handoff sections" in issue for issue in issues),
+            issues,
+        )
+
+    def test_tracked_boundary_rejects_all_local_and_storage_content(self) -> None:
+        issues = check_workspace.tracked_boundary_issues(
+            {
+                ".local/README.md",
+                ".local/private.json",
+                "storage/artifacts/README.md",
+                "storage/archives/README.md",
+                "storage/private.bin",
+            }
+        )
+
+        self.assertEqual(
+            issues,
+            [
+                "local storage content must not be tracked by the workspace repository: storage/private.bin",
+                "private/runtime file is tracked: .local/private.json",
+            ],
+        )
+
+    def test_gitignore_covers_all_local_and_storage_content(self) -> None:
+        for relative in (".local/private.json", "storage/private.bin"):
+            with self.subTest(relative=relative):
+                result = subprocess.run(
+                    ["git", "check-ignore", "--quiet", relative],
+                    cwd=ROOT,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, relative)
+
+    def test_handoff_packet_supports_project_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory)
+            project = projects_root / "example"
+            project.mkdir()
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (project / "project.md").write_text(
+                """# Project: example
+
+## Status
+
+active
+
+## Goal
+
+Ship the project.
+
+## Constraints
+
+Keep changes local.
+
+## Decisions
+
+Use the current architecture.
+
+## Progress
+
+Core behavior is implemented.
+
+## Next Action
+
+Run the focused checks.
+
+## Blockers
+
+None.
+
+## Verification
+
+python -B test.py
+""",
+                encoding="utf-8",
+            )
+
+            packet = task_lifecycle.build_handoff_packet(projects_root, "example")
+
+        self.assertIn("State source: project.md", packet)
+        self.assertIn("Status: active", packet)
+        self.assertIn("## Progress\n\nCore behavior is implemented.", packet)
+        self.assertIn("## Next action\n\nRun the focused checks.", packet)
+
+    def test_workspace_parser_has_handoff_command(self) -> None:
+        args = workspace.build_parser().parse_args(["handoff", "example"])
+        self.assertEqual(args.command, "handoff")
+        self.assertEqual(args.work_name, "example")
+
+    def test_work_discovery_includes_tasks_and_projects(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory)
+            task = projects_root / "task-one"
+            project = projects_root / "project-one"
+            ignored = projects_root / "empty"
+            task.mkdir()
+            project.mkdir()
+            ignored.mkdir()
+            (task / "task.md").write_text("# Task\n", encoding="utf-8")
+            (project / "project.md").write_text("# Project\n", encoding="utf-8")
+
+            names = task_lifecycle.discover_work_names(projects_root)
+
+        self.assertEqual(names, ["project-one", "task-one"])
+
+    def test_project_doctor_flags_unfinished_handoff_state(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            project = Path(directory)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            (project / "project.md").write_text(
+                make_project.build_project_md("example"),
+                encoding="utf-8",
+            )
+
+            findings = task_lifecycle.diagnose_project(project)
+
+        self.assertTrue(any("Goal" in finding for finding in findings), findings)
+        self.assertTrue(any("Verification" in finding for finding in findings), findings)
+
+    def test_project_doctor_flags_needs_review_status(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            project = Path(directory)
+            (project / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+            state = make_project.build_project_md("example").replace(
+                "## Status\n\nplanning",
+                "## Status\n\nneeds-review",
+            )
+            state = state.replace(
+                "Describe the product or outcome.",
+                "Deliver a verified example project.",
+            ).replace(
+                "List observable conditions for a usable first version.",
+                "Focused checks pass and the handoff state is current.",
+            ).replace(
+                "Record durable implementation decisions and their reasons.",
+                "Keep the current architecture.",
+            ).replace(
+                "Record completed milestones that matter for handoff.",
+                "The workspace contract is present.",
+            ).replace(
+                "Complete this state file and the open-source assessment before implementation.",
+                "Review the implementation and replace this bootstrap state.",
+            ).replace(
+                "List commands that verify the project.",
+                "python -B test.py",
+            )
+            (project / "project.md").write_text(state, encoding="utf-8")
+
+            findings = task_lifecycle.diagnose_project(project)
+
+        self.assertIn("Status needs review before handoff", findings)
+
+    def test_task_doctor_reports_missing_agents_file(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            task_root = Path(directory)
+            task = task_lifecycle.TaskRecord(
+                task_root,
+                "example",
+                {
+                    "Status": "active",
+                    "Complexity": "standard",
+                    "Phase": "implementation",
+                    "Goal": "Deliver the requested behavior.",
+                    "Acceptance criteria": "The behavior is verified.",
+                    "Verification commands": "python -B test.py",
+                    "Next action": "Run the focused test.",
+                    "Blockers": "None",
+                },
+            )
+            (task_root / "summary.md").write_text("# Summary\n", encoding="utf-8")
+
+            findings = task_lifecycle.diagnose_task(task)
+
+        self.assertIn("AGENTS.md is missing", findings)
+
+    def test_generated_task_rules_define_handoff_state(self) -> None:
+        rules = make_task.build_task_agents("example")
+        self.assertIn("Stable task rules belong in this file", rules)
+        self.assertIn("Progress", rules)
+        self.assertIn("Next action", rules)
+        self.assertIn("Blockers", rules)
+        self.assertIn("Verification", rules)
+
+    def test_open_source_research_skill_and_sop_exist(self) -> None:
+        self.assertTrue(
+            (
+                ROOT
+                / ".agents"
+                / "skills"
+                / "open-source-project-research"
+                / "SKILL.md"
+            ).is_file()
+        )
+        self.assertTrue(
+            (
+                ROOT
+                / "capabilities"
+                / "sops"
+                / "open_source_project_intake.md"
+            ).is_file()
+        )
+
+    def test_scaffold_rejects_exact_existing_project_without_changes(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            project = projects_root / "example-project"
+            project.mkdir(parents=True)
+            marker = project / "keep.txt"
+            marker.write_text("unchanged", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_project.scaffold_project(projects_root, "example-project")
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "unchanged")
+            self.assertEqual(
+                [path.name for path in project.iterdir()],
+                ["keep.txt"],
+            )
+
+    def test_scaffold_rejects_case_insensitive_project_collision(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            projects_root = Path(directory) / "projects"
+            (projects_root / "Example-Project").mkdir(parents=True)
+
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                make_project.scaffold_project(projects_root, "example-project")
+
+    def test_project_dry_run_rejects_existing_project(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            projects_root = root / "projects"
+            (projects_root / "example-project").mkdir(parents=True)
+            config = {"paths": {"projects": "projects"}}
+
+            with patch.object(workspace, "load_workspace_config", return_value=config):
+                with self.assertRaisesRegex(ValueError, "already exists"):
+                    workspace.run_project_new(
+                        root,
+                        "example-project",
+                        dry_run=True,
+                    )
+
+    def test_project_new_reports_created_project(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
+
+            with patch.object(workspace, "load_workspace_config", return_value=config):
+                with redirect_stdout(io.StringIO()) as output:
+                    result = workspace.run_project_new(
+                        root,
+                        "example-project",
+                        dry_run=False,
+                    )
+
+            self.assertEqual(result, 0)
+            self.assertIn(
+                str(root / "projects" / "example-project"),
+                output.getvalue(),
+            )
+
+    def test_make_project_main_reports_created_project(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
+
+            with (
+                patch.object(make_project, "workspace_root", return_value=root),
+                patch.object(
+                    make_project,
+                    "load_workspace_config",
+                    return_value=config,
+                ),
+                patch.object(sys, "argv", ["make_project.py", "example-project"]),
+                redirect_stdout(io.StringIO()) as output,
+            ):
+                result = make_project.main()
+
+            self.assertEqual(result, 0)
+            self.assertIn(
+                str(root / "projects" / "example-project"),
+                output.getvalue(),
+            )
+
+    def test_project_path_is_configured_and_root_exists(self) -> None:
+        config = load_workspace_config(ROOT)
+        self.assertEqual(config["paths"]["projects"], "projects")
+        self.assertTrue((ROOT / "projects" / "README.md").is_file())
+
+    def test_workspace_parser_has_explicit_project_new_command(self) -> None:
+        args = workspace.build_parser().parse_args(
+            ["project", "new", "example-project"]
+        )
+        self.assertEqual(args.command, "project")
+        self.assertEqual(args.project_command, "new")
+        self.assertEqual(args.project_name, "example-project")
+
+    def test_workspace_check_rejects_tracked_project_content(self) -> None:
+        with patch.object(
+            check_workspace,
+            "git_tracked_files",
+            return_value=["projects/README.md", "projects/example/src/app.py"],
+        ):
+            issues = check_workspace.check_workspace(ROOT)
+
+        self.assertIn(
+            "project content must not be tracked by the workspace repository: "
+            "projects/example/src/app.py",
+            issues,
+        )
+
+    def test_workspace_check_rejects_tracked_artifact_content(self) -> None:
+        with patch.object(
+            check_workspace,
+            "git_tracked_files",
+            return_value=[
+                "storage/artifacts/README.md",
+                "storage/artifacts/report.json",
+            ],
+        ):
+            issues = check_workspace.check_workspace(ROOT)
+
+        self.assertIn(
+            "local storage content must not be tracked by the workspace "
+            "repository: storage/artifacts/report.json",
+            issues,
+        )
+
+    def test_workspace_check_rejects_tracked_archive_content(self) -> None:
+        with patch.object(
+            check_workspace,
+            "git_tracked_files",
+            return_value=[
+                "storage/archives/README.md",
+                "storage/archives/projects/example/src/app.py",
+            ],
+        ):
+            issues = check_workspace.check_workspace(ROOT)
+
+        self.assertIn(
+            "local storage content must not be tracked by the workspace "
+            "repository: storage/archives/projects/example/src/app.py",
+            issues,
+        )
+
+    def test_runtime_gitignore_is_default_deny_with_contract_allowlist(self) -> None:
+        ignored = subprocess.run(
+            [
+                "git",
+                "check-ignore",
+                "--no-index",
+                "--quiet",
+                "runtime/installers/future-installer.bin",
+            ],
+            cwd=ROOT,
+            check=False,
+        )
+        contract = subprocess.run(
+            [
+                "git",
+                "check-ignore",
+                "--no-index",
+                "--quiet",
+                "runtime/tmp/README.md",
+            ],
+            cwd=ROOT,
+            check=False,
+        )
+
+        self.assertEqual(ignored.returncode, 0)
+        self.assertEqual(contract.returncode, 1)
 
     def test_verification_stops_after_the_first_failed_command(self) -> None:
         task = task_lifecycle.TaskRecord(
@@ -167,6 +754,10 @@ None.
 """,
                 encoding="utf-8",
             )
+            (task_root / "AGENTS.md").write_text(
+                "# Task Rules\n",
+                encoding="utf-8",
+            )
             task_lifecycle.close_task(task_lifecycle.load_task(tasks_root, "example"))
             sections = task_lifecycle.parse_sections(
                 (task_root / "task.md").read_text(encoding="utf-8")
@@ -188,6 +779,184 @@ None.
 
 
 class V2IntegrationTests(unittest.TestCase):
+    def test_git_status_inventory_excludes_untracked_files(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "--quiet"], cwd=root, check=True)
+            tracked = root / "tracked.md"
+            untracked = root / "untracked.md"
+            tracked.write_text("# Tracked\n", encoding="utf-8")
+            untracked.write_text("# Untracked\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.md"], cwd=root, check=True)
+
+            inventory = generate_workspace_status.git_tracked_files(root)
+
+        self.assertEqual(inventory, {"tracked.md"})
+
+    def test_local_skill_catalog_contains_only_non_remote_skills(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            skills = root / ".agents" / "skills"
+            for name in ("remote-skill", "local-skill"):
+                skill_file = skills / name / "SKILL.md"
+                skill_file.parent.mkdir(parents=True, exist_ok=True)
+                skill_file.write_text(f"# {name}\n", encoding="utf-8")
+            remote_catalog = {
+                "version": 1,
+                "scope": "workspace-remote",
+                "skills": [
+                    {
+                        "name": "remote-skill",
+                        "path": ".agents/skills/remote-skill",
+                    }
+                ],
+            }
+            catalog = generate_workspace_status.build_local_skill_catalog(
+                root,
+                skills,
+                remote_catalog,
+            )
+
+        self.assertEqual(
+            catalog,
+            {
+                "version": 1,
+                "scope": "workspace-local",
+                "skills": [
+                    {
+                        "name": "local-skill",
+                        "path": ".agents/skills/local-skill",
+                    }
+                ],
+            },
+        )
+        self.assertEqual(json.loads(json.dumps(catalog)), catalog)
+
+    def test_remote_skill_catalog_must_match_tracked_skill_bodies(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            skills = root / ".agents" / "skills"
+            for name in ("declared", "missing-from-catalog"):
+                skill_file = skills / name / "SKILL.md"
+                skill_file.parent.mkdir(parents=True, exist_ok=True)
+                skill_file.write_text(f"# {name}\n", encoding="utf-8")
+            catalog = {
+                "version": 1,
+                "scope": "workspace-remote",
+                "skills": [
+                    {
+                        "name": "declared",
+                        "path": ".agents/skills/declared",
+                    }
+                ],
+            }
+            tracked = {
+                ".agents/skills/declared/SKILL.md",
+                ".agents/skills/missing-from-catalog/SKILL.md",
+            }
+            with self.assertRaisesRegex(ValueError, "missing from remote catalog"):
+                generate_workspace_status.validate_remote_skill_catalog(
+                    root,
+                    skills,
+                    catalog,
+                    tracked,
+                )
+
+    def test_status_generation_enforces_remote_skill_catalog(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            skills = root / ".agents" / "skills"
+            skill_file = skills / "tracked-but-undeclared" / "SKILL.md"
+            skill_file.parent.mkdir(parents=True)
+            skill_file.write_text("# Undeclared\n", encoding="utf-8")
+            for relative in (
+                "capabilities/sops",
+                "capabilities/prompts",
+                "docs/framework",
+                "docs/environments",
+            ):
+                (root / relative).mkdir(parents=True)
+            manifest = root / ".workspace" / "registry" / "skills.remote.json"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "scope": "workspace-remote",
+                        "skills": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = {
+                "paths": {
+                    "skills": ".agents/skills",
+                    "sops": "capabilities/sops",
+                    "prompts": "capabilities/prompts",
+                    "framework_docs": "docs/framework",
+                    "environment_docs": "docs/environments",
+                    "remote_skills_manifest": ".workspace/registry/skills.remote.json",
+                }
+            }
+
+            with (
+                patch.object(
+                    generate_workspace_status,
+                    "load_workspace_config",
+                    return_value=config,
+                ),
+                patch.object(
+                    generate_workspace_status,
+                    "git_tracked_files",
+                    return_value={
+                        ".agents/skills/tracked-but-undeclared/SKILL.md",
+                    },
+                ),
+                self.assertRaisesRegex(ValueError, "missing from remote catalog"),
+            ):
+                generate_workspace_status.build_status(root)
+
+    def test_tool_inventory_excludes_untracked_tools(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            tracked = "capabilities/tools/tracked.py"
+            local = "capabilities/tools/local.py"
+            for relative in (tracked, local):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("# tool\n", encoding="utf-8")
+            with patch.object(
+                generate_workspace_status,
+                "TOOL_DESCRIPTIONS",
+                {tracked: "tracked", local: "local"},
+            ):
+                items = generate_workspace_status.tracked_tool_items(root, {tracked})
+
+        self.assertEqual(items, [f"- `{tracked}`: tracked"])
+
+    def test_local_skill_catalog_writer_creates_machine_local_manifest(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            output = Path(directory) / "runtime" / "skills.local.json"
+            catalog = {
+                "version": 1,
+                "scope": "workspace-local",
+                "skills": [
+                    {
+                        "name": "local-skill",
+                        "path": ".agents/skills/local-skill",
+                    }
+                ],
+            }
+            generate_workspace_status.write_local_skill_catalog(output, catalog)
+
+            self.assertEqual(
+                json.loads(output.read_text(encoding="utf-8")),
+                catalog,
+            )
+
+    def test_workspace_parser_exposes_local_skill_inventory_update(self) -> None:
+        self.assertIn("update-local-skills", workspace.build_parser().format_help())
+
     def test_status_inventory_uses_configured_internal_paths(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
             base = Path(directory)
@@ -217,6 +986,28 @@ class V2IntegrationTests(unittest.TestCase):
                 generate_workspace_status,
                 "load_workspace_config",
                 return_value=config,
+            ), patch.object(
+                generate_workspace_status,
+                "git_tracked_files",
+                return_value={
+                    (skills / "configured-skill" / "SKILL.md").relative_to(ROOT).as_posix(),
+                    *((path / "configured-marker.md").relative_to(ROOT).as_posix() for path in (sops, prompts, environments)),
+                },
+            ), patch.object(
+                generate_workspace_status,
+                "load_remote_skill_catalog",
+                return_value={
+                    "version": 1,
+                    "scope": "workspace-remote",
+                    "skills": [
+                        {
+                            "name": "configured-skill",
+                            "path": (skills / "configured-skill")
+                            .relative_to(ROOT)
+                            .as_posix(),
+                        }
+                    ],
+                },
             ):
                 status = generate_workspace_status.build_status(ROOT)
 
@@ -327,6 +1118,14 @@ class V2IntegrationTests(unittest.TestCase):
         self.assertIn("ubuntu-latest", text)
         self.assertIn("capabilities/tools/workspace.py check --full", text)
 
+    def test_ci_checks_every_supported_python_version(self) -> None:
+        workflow = ROOT / ".github" / "workflows" / "workspace-check.yml"
+        text = workflow.read_text(encoding="utf-8")
+        for version in ('"3.10"', '"3.11"', '"3.12"'):
+            with self.subTest(version=version):
+                self.assertIn(version, text)
+        self.assertIn("python-version: ${{ matrix.python-version }}", text)
+
     def test_link_scan_excludes_private_and_runtime_roots(self) -> None:
         with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
             root = Path(directory)
@@ -380,83 +1179,77 @@ class V2IntegrationTests(unittest.TestCase):
         self.assertIn("capabilities/tools/verify_workspace_status.py", commands)
         self.assertNotIn("capabilities/tools/generate_workspace_status.py", commands)
 
-    def test_task_cli_rejects_mutation_before_access(self) -> None:
-        for arguments in (
-            ("new", "must_not_exist"),
-            ("verify", "must_not_exist", "--run"),
-            ("close", "must_not_exist"),
-        ):
-            with self.subTest(arguments=arguments):
-                result = subprocess.run(
-                    [sys.executable, "-B", "capabilities/tools/workspace.py", *arguments],
-                    cwd=ROOT,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
+    def test_task_new_uses_configured_projects_root(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
+
+            with patch.object(workspace, "load_workspace_config", return_value=config):
+                with redirect_stdout(io.StringIO()) as output:
+                    result = workspace.run_new(
+                        root,
+                        "example-task",
+                        dry_run=False,
+                        complexity="simple",
+                    )
+
+            self.assertEqual(result, 0)
+            self.assertTrue((root / "projects" / "example-task" / "task.md").is_file())
+            self.assertIn(str(root / "projects" / "example-task"), output.getvalue())
+
+    def test_task_dry_run_uses_configured_projects_root(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            root = Path(directory)
+            config = {"paths": {"projects": "projects"}}
+
+            with (
+                patch.object(workspace, "load_workspace_config", return_value=config),
+                redirect_stdout(io.StringIO()) as output,
+            ):
+                result = workspace.run_new(
+                    root,
+                    "dry-run-preview",
+                    dry_run=True,
+                    complexity="simple",
                 )
-                self.assertEqual(result.returncode, 1)
-                self.assertIn("read-only", result.stdout)
 
-    def test_new_dry_run_is_allowed_for_a_read_only_external_root(self) -> None:
-        tasks_root = TMP_ROOT / "dry-run-external-root"
-        task_root = tasks_root / "dry-run-preview"
-        self.assertFalse(task_root.exists())
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-B",
-                "capabilities/tools/workspace.py",
-                "new",
-                "dry-run-preview",
-                "--dry-run",
-            ],
-            cwd=ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            env={**os.environ, "AGENT_TASKS_ROOT": str(tasks_root)},
-        )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("Dry run:", result.stdout)
-        self.assertFalse(task_root.exists())
-
-    def test_external_tasks_override_does_not_change_access(self) -> None:
-        config = load_workspace_config(ROOT)
-        tasks = resolve_external_root(ROOT, config, "tasks")
-        self.assertEqual(tasks.access, "read_only")
-        self.assertFalse(tasks.path.is_relative_to(ROOT))
-
-    def test_missing_external_tasks_root_is_not_a_structure_failure(self) -> None:
-        missing = ROOT.parent / "missing-external-tasks-review"
-        with patch.dict("os.environ", {"AGENT_TASKS_ROOT": str(missing)}):
-            issues = check_workspace.check_workspace(ROOT)
-            warnings = check_workspace.workspace_warnings(ROOT)
-
-        self.assertFalse(
-            any("external tasks root is unavailable" in issue for issue in issues),
-            issues,
-        )
-        self.assertTrue(
-            any("external tasks root is unavailable" in warning for warning in warnings),
-            warnings,
-        )
+            self.assertEqual(result, 0)
+            self.assertIn(str(root / "projects" / "dry-run-preview"), output.getvalue())
 
     def test_status_generator_is_deterministic(self) -> None:
-        with patch.dict("os.environ", {"AGENT_TASKS_ROOT": str(ROOT.parent / "one")}):
-            first = generate_workspace_status.build_status(ROOT)
-        with patch.dict("os.environ", {"AGENT_TASKS_ROOT": str(ROOT.parent / "two")}):
-            second = generate_workspace_status.build_status(ROOT)
+        first = generate_workspace_status.build_status(ROOT)
+        second = generate_workspace_status.build_status(ROOT)
         self.assertEqual(first, second)
-        self.assertIn("External tasks access: `read_only`", first)
-        self.assertIn("## Reserved Control Plane", first)
-        self.assertIn("## Current Framework Docs", first)
+        self.assertNotIn("external_roots", first)
+        self.assertIn("Permanent policy lives only in `AGENTS.md`.", first)
+        self.assertIn("## Remote Framework Docs", first)
         self.assertIn("docs/framework/task-lifecycle.md", first)
-        self.assertNotIn("External tasks available:", first)
-        self.assertNotIn("External tasks source:", first)
+        self.assertNotIn("## Current ", first)
+        for policy_heading in (
+            "## Reserved Control Plane",
+            "## Local Task And Project Policy",
+            "## Review Proportionality",
+            "## Open Source Intake",
+            "## Runtime Policy",
+        ):
+            with self.subTest(policy_heading=policy_heading):
+                self.assertNotIn(policy_heading, first)
+
+    def test_markdown_inventory_uses_portable_casefolded_order(self) -> None:
+        with tempfile.TemporaryDirectory(dir=TMP_ROOT) as directory:
+            docs = Path(directory)
+            (docs / "aider.md").write_text("# Aider\n", encoding="utf-8")
+            (docs / "README.md").write_text("# Readme\n", encoding="utf-8")
+
+            items = generate_workspace_status.markdown_items(ROOT, docs)
+
+        self.assertEqual(
+            items,
+            [
+                f"- `{(docs / 'aider.md').relative_to(ROOT).as_posix()}`",
+                f"- `{(docs / 'README.md').relative_to(ROOT).as_posix()}`",
+            ],
+        )
 
     def test_workspace_parser_has_explicit_status_update_command(self) -> None:
         args = workspace.build_parser().parse_args(["update-status"])
@@ -493,7 +1286,7 @@ class V2IntegrationTests(unittest.TestCase):
         self.assertNotIn("regenerate and\nverify `WORKSPACE_STATUS.md`", efficiency)
         self.assertIn("verify `WORKSPACE_STATUS.md` without rewriting it", efficiency)
 
-    def test_v2_docs_preserve_common_safety_and_lifecycle_contracts(self) -> None:
+    def test_v2_docs_keep_policy_in_agents_and_lifecycle_design_in_docs(self) -> None:
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         for required in (
             "global shell configuration",
@@ -514,7 +1307,12 @@ class V2IntegrationTests(unittest.TestCase):
             self.assertIn(heading, lifecycle)
 
         guide = (ROOT / "WORKSPACE_GUIDE.md").read_text(encoding="utf-8")
-        self.assertIn("## Common Operating Principles", guide)
+        self.assertIn("## Policy Source", guide)
+        self.assertIn("`AGENTS.md` is the only permanent policy source", guide)
+        self.assertNotIn("## Common Operating Principles", guide)
+
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("[AGENTS.md](AGENTS.md) 是唯一的永久政策来源", readme)
 
     def test_no_forbidden_source_assets_were_copied(self) -> None:
         for relative in (

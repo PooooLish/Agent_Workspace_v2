@@ -1,20 +1,36 @@
-# Machine-local environments and credentials
-.local/envs/**
-.local/secrets/**
+# Machine-local environments, credentials, and state; keep only the contract
+.local/**
+!.local/
+!.local/README.md
+
+# Restrictive-license third-party Skills kept local to this workspace
+.agents/skills/photo-abstract-editorial/**
 
 # Runtime state; keep only directory contracts
-runtime/task-state/**
-runtime/runs/**
-runtime/outputs/**
-runtime/logs/**
-runtime/tmp/**
-runtime/sandboxes/**
+runtime/**
+!runtime/task-state/
 !runtime/task-state/README.md
+!runtime/runs/
 !runtime/runs/README.md
+!runtime/outputs/
 !runtime/outputs/README.md
+!runtime/logs/
 !runtime/logs/README.md
+!runtime/tmp/
 !runtime/tmp/README.md
+!runtime/sandboxes/
 !runtime/sandboxes/README.md
+
+# Local projects are managed independently from the workspace repository
+projects/**
+!projects/README.md
+
+# Durable local state; keep only directory contracts
+storage/**
+!storage/artifacts/
+!storage/artifacts/README.md
+!storage/archives/
+!storage/archives/README.md
 
 # Common generated files
 **/__pycache__/
@@ -28,4 +44,3 @@ node_modules/
 !.env.example
 *.bak
 *.tmp
-

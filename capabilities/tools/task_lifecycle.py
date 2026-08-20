@@ -12,6 +12,7 @@ from task_names import TASK_NAME_RE, validate_task_name
 SECTION_RE = re.compile(r"^##[ \t]+(.+?)[ \t]*$", re.MULTILINE)
 COMPLEXITIES = ("simple", "standard", "complex")
 STATUSES = ("planning", "active", "blocked", "completed", "abandoned")
+PROJECT_STATUSES = (*STATUSES, "needs-review")
 CONTRACT_STATUSES = ("pending", "in_progress", "blocked", "completed", "not-applicable")
 CONTRACT_COLUMNS = (
     "ID",
@@ -141,7 +142,7 @@ def load_task(tasks_root: Path, name: str) -> TaskRecord:
     task_root = task_root_for(tasks_root, name)
     task_path = task_root / "task.md"
     if not task_path.is_file():
-        raise ValueError(f"tasks/{name}/task.md does not exist")
+        raise ValueError(f"projects/{name}/task.md does not exist")
     return TaskRecord(task_root, name, parse_sections(task_path.read_text(encoding="utf-8")))
 
 
@@ -151,7 +152,21 @@ def discover_task_names(tasks_root: Path) -> list[str]:
     return sorted(
         path.name
         for path in tasks_root.iterdir()
-        if path.is_dir() and TASK_NAME_RE.fullmatch(path.name)
+        if path.is_dir()
+        and TASK_NAME_RE.fullmatch(path.name)
+        and (path / "task.md").is_file()
+    )
+
+
+def discover_work_names(projects_root: Path) -> list[str]:
+    if not projects_root.is_dir():
+        return []
+    return sorted(
+        path.name
+        for path in projects_root.iterdir()
+        if path.is_dir()
+        and TASK_NAME_RE.fullmatch(path.name)
+        and ((path / "task.md").is_file() or (path / "project.md").is_file())
     )
 
 
@@ -201,8 +216,47 @@ def build_resume_packet(task: TaskRecord) -> str:
     return "\n".join(lines)
 
 
+def build_handoff_packet(projects_root: Path, name: str) -> str:
+    work_root = task_root_for(projects_root, name)
+    if not (work_root / "AGENTS.md").is_file():
+        raise ValueError(f"projects/{name}/AGENTS.md does not exist")
+    if (work_root / "task.md").is_file():
+        return "State source: task.md\n" + build_resume_packet(
+            load_task(projects_root, name)
+        )
+
+    project_path = work_root / "project.md"
+    if not project_path.is_file():
+        raise ValueError(f"projects/{name}/task.md or project.md does not exist")
+    sections = parse_sections(project_path.read_text(encoding="utf-8"))
+    branch, commit = git_context(work_root)
+    status = section_value(sections, "Status")
+    fields = (
+        ("Goal", section_value(sections, "Goal")),
+        ("Constraints", section_value(sections, "Constraints")),
+        ("Decisions", section_value(sections, "Decisions")),
+        ("Progress", section_value(sections, "Progress")),
+        ("Next action", section_value(sections, "Next Action")),
+        ("Blockers", section_value(sections, "Blockers")),
+        ("Verification", section_value(sections, "Verification")),
+    )
+    lines = [
+        f"# Handoff: {name}",
+        "",
+        "- State source: project.md",
+        f"- Status: {status or 'unknown'}",
+        f"- Git branch: {branch}",
+        f"- Git commit: {commit}",
+    ]
+    for label, value in fields:
+        lines.extend(("", f"## {label}", "", value or "Not recorded."))
+    return "\n".join(lines)
+
+
 def diagnose_task(task: TaskRecord) -> list[str]:
     findings: list[str] = []
+    if not (task.root / "AGENTS.md").is_file():
+        findings.append("AGENTS.md is missing")
     required = {
         "Status": task.status,
         "Complexity": task.complexity,
@@ -246,6 +300,37 @@ def diagnose_task(task: TaskRecord) -> list[str]:
                 )
     if not (task.root / "summary.md").is_file():
         findings.append("summary.md is missing")
+    return findings
+
+
+def diagnose_project(project_root: Path) -> list[str]:
+    findings: list[str] = []
+    if not (project_root / "AGENTS.md").is_file():
+        findings.append("AGENTS.md is missing")
+    project_path = project_root / "project.md"
+    if not project_path.is_file():
+        findings.append("project.md is missing")
+        return findings
+
+    sections = parse_sections(project_path.read_text(encoding="utf-8"))
+    required = (
+        "Status",
+        "Goal",
+        "Acceptance Criteria",
+        "Decisions",
+        "Progress",
+        "Next Action",
+        "Blockers",
+        "Verification",
+    )
+    for heading in required:
+        if is_placeholder(section_value(sections, heading)):
+            findings.append(f"{heading} is missing or still contains scaffold text")
+    status = section_value(sections, "Status")
+    if status and status not in PROJECT_STATUSES:
+        findings.append(f"Status must be one of: {', '.join(PROJECT_STATUSES)}")
+    elif status == "needs-review":
+        findings.append("Status needs review before handoff")
     return findings
 
 

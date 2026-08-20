@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import os
 import re
 import subprocess
@@ -12,7 +13,6 @@ from workspace_paths import (
     CONFIG_PATH,
     configured_path,
     load_workspace_config,
-    resolve_external_root,
     workspace_root,
 )
 
@@ -46,17 +46,33 @@ REQUIRED_ITEMS = (
     ".local/README.md",
     "docs/framework",
     "docs/environments",
+    "projects/README.md",
 )
 
 REQUIRED_IGNORE_PATTERNS = (
-    ".local/envs/**",
-    ".local/secrets/**",
-    "runtime/task-state/**",
-    "runtime/runs/**",
-    "runtime/outputs/**",
-    "runtime/logs/**",
-    "runtime/tmp/**",
-    "runtime/sandboxes/**",
+    ".local/**",
+    "!.local/",
+    "!.local/README.md",
+    "runtime/**",
+    "!runtime/task-state/",
+    "!runtime/task-state/README.md",
+    "!runtime/runs/",
+    "!runtime/runs/README.md",
+    "!runtime/outputs/",
+    "!runtime/outputs/README.md",
+    "!runtime/logs/",
+    "!runtime/logs/README.md",
+    "!runtime/tmp/",
+    "!runtime/tmp/README.md",
+    "!runtime/sandboxes/",
+    "!runtime/sandboxes/README.md",
+    "projects/**",
+    "!projects/README.md",
+    "storage/**",
+    "!storage/artifacts/",
+    "!storage/artifacts/README.md",
+    "!storage/archives/",
+    "!storage/archives/README.md",
     "**/__pycache__/",
     ".env",
     ".env.*",
@@ -74,6 +90,26 @@ LINK_SCAN_ROOTS = (
 )
 WINDOWS_REPARSE_POINT = 0x400
 SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+PROJECT_HANDOFF_SECTIONS = (
+    "Status",
+    "Goal",
+    "Acceptance Criteria",
+    "Decisions",
+    "Progress",
+    "Next Action",
+    "Blockers",
+    "Verification",
+)
+TASK_HANDOFF_SECTIONS = (
+    "Status",
+    "Goal",
+    "Acceptance criteria",
+    "Verification commands",
+    "Decisions",
+    "Progress",
+    "Next action",
+    "Blockers",
+)
 
 
 def skill_frontmatter(path: Path) -> dict[str, str]:
@@ -121,6 +157,52 @@ def skill_issues(skills_root: Path) -> list[str]:
                 )
             else:
                 names[name] = skill.name
+    return issues
+
+
+def project_rule_issues(projects_root: Path) -> list[str]:
+    if not projects_root.is_dir():
+        return []
+    issues: list[str] = []
+    projects = sorted(
+        (path for path in projects_root.iterdir() if path.is_dir()),
+        key=lambda path: path.name.casefold(),
+    )
+    for project in projects:
+        relative = f"projects/{project.name}"
+        if not (project / "AGENTS.md").is_file():
+            issues.append(
+                "concrete task or project is missing top-level AGENTS.md: "
+                + relative
+            )
+        task_state = project / "task.md"
+        project_state = project / "project.md"
+        if task_state.is_file():
+            state_file = task_state
+            required_sections = TASK_HANDOFF_SECTIONS
+        elif project_state.is_file():
+            state_file = project_state
+            required_sections = PROJECT_HANDOFF_SECTIONS
+        else:
+            issues.append(
+                "concrete task or project is missing task.md or project.md: "
+                + relative
+            )
+            continue
+        headings = {
+            match.group(1).strip()
+            for match in re.finditer(
+                r"^##[ \t]+(.+?)[ \t]*$",
+                state_file.read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+        }
+        missing = [heading for heading in required_sections if heading not in headings]
+        if missing:
+            issues.append(
+                f"{state_file.name} is missing handoff sections in {relative}: "
+                + ", ".join(missing)
+            )
     return issues
 
 
@@ -173,7 +255,40 @@ def iter_link_candidates(root: Path) -> Iterator[Path]:
                         pending.append(path)
 
 
-def check_workspace(root: Path) -> list[str]:
+def tracked_boundary_issues(tracked: set[str]) -> list[str]:
+    issues: list[str] = []
+    runtime_contracts = {
+        "runtime/task-state/README.md",
+        "runtime/runs/README.md",
+        "runtime/outputs/README.md",
+        "runtime/logs/README.md",
+        "runtime/tmp/README.md",
+        "runtime/sandboxes/README.md",
+    }
+    storage_contracts = {
+        "storage/artifacts/README.md",
+        "storage/archives/README.md",
+    }
+    for relative in tracked:
+        normalized = relative.replace("\\", "/")
+        if normalized.startswith(".local/") and normalized != ".local/README.md":
+            issues.append(f"private/runtime file is tracked: {normalized}")
+        if normalized.startswith("runtime/") and normalized not in runtime_contracts:
+            issues.append(f"private/runtime file is tracked: {normalized}")
+        if normalized.startswith("projects/") and normalized != "projects/README.md":
+            issues.append(
+                "project content must not be tracked by the workspace repository: "
+                f"{normalized}"
+            )
+        if normalized.startswith("storage/") and normalized not in storage_contracts:
+            issues.append(
+                "local storage content must not be tracked by the workspace repository: "
+                f"{normalized}"
+            )
+    return sorted(set(issues))
+
+
+def check_workspace(root: Path, *, include_projects: bool = False) -> list[str]:
     issues: list[str] = []
     for relative in REQUIRED_ITEMS:
         if not (root / relative).exists():
@@ -194,11 +309,6 @@ def check_workspace(root: Path) -> list[str]:
             except (KeyError, TypeError, ValueError) as error:
                 issues.append(str(error))
 
-    tasks = resolve_external_root(root, config, "tasks")
-    if tasks.access != "read_only":
-        issues.append("external tasks root must be read_only")
-    if tasks.path.is_relative_to(root):
-        issues.append("external tasks root unexpectedly resolves inside V2")
     gitignore_path = root / ".gitignore"
     if gitignore_path.is_file():
         lines = {
@@ -216,13 +326,12 @@ def check_workspace(root: Path) -> list[str]:
 
     skills_root = configured_path(root, config, "skills")
     issues.extend(skill_issues(skills_root))
+    if include_projects:
+        projects_root = configured_path(root, config, "projects")
+        issues.extend(project_rule_issues(projects_root))
 
     tracked = set(git_tracked_files(root))
-    for relative in tracked:
-        normalized = relative.replace("\\", "/")
-        if normalized.startswith((".local/envs/", ".local/secrets/", "runtime/")):
-            if not normalized.endswith("/README.md"):
-                issues.append(f"private/runtime file is tracked: {normalized}")
+    issues.extend(tracked_boundary_issues(tracked))
 
     tools_root = configured_path(root, config, "tools")
     actual_tools = {
@@ -238,22 +347,16 @@ def check_workspace(root: Path) -> list[str]:
     return sorted(set(issues))
 
 
-def workspace_warnings(root: Path) -> list[str]:
-    config = load_workspace_config(root)
-    tasks = resolve_external_root(root, config, "tasks")
-    warnings: list[str] = []
-    if not tasks.path.is_dir():
-        warnings.append(
-            f"external tasks root is unavailable; task commands are disabled: {tasks.path}"
-        )
-    return warnings
-
-
 def main() -> int:
     root = workspace_root()
-    issues = check_workspace(root)
-    for warning in workspace_warnings(root):
-        print(f"Warning: {warning}")
+    parser = argparse.ArgumentParser(description="Check the V2 workspace architecture.")
+    parser.add_argument(
+        "--local-projects",
+        action="store_true",
+        help="also validate direct child project handoff contracts",
+    )
+    args = parser.parse_args()
+    issues = check_workspace(root, include_projects=args.local_projects)
     if issues:
         print("Workspace check failed:")
         for issue in issues:

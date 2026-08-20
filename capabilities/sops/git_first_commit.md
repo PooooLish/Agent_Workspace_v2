@@ -21,8 +21,9 @@ Use this SOP before creating the first workspace commit or any later broad struc
 - Do not stage dependency folders such as `node_modules/`.
 - Do not stage raw media, generated renders, logs, caches, or temporary files unless explicitly intended.
 - Do not stage local backup files such as `*.bak`; keep the canonical file instead.
-- External task files are outside the V2 Git candidate set. Publish an approved
-  task only through its independently reviewed repository.
+- Concrete task and project files under `projects/`, plus legacy external task
+  files, are outside the V2 Git candidate set. Publish approved concrete work
+  only through its independently reviewed repository.
 - Do not delete cleanup candidates without explicit approval.
 
 ## Expected report
